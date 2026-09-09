@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: a2l-live
-    runtime: node
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
