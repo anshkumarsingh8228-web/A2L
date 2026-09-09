@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>Alone2Lone</title>
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <div class="toprow">
+    <div class="brand-wrap"><div class="a2l-logo" aria-label="A2L logo"><span>A2L</span></div><div class="brand brand-tech">Alone2Lone</div></div>
+    <button class="iconbtn" id="moreBtn" aria-label="More">⋮</button>
+  </div>
+  <div class="menu" id="moreMenu">
+    <button data-page="settings">⚙️ Settings</button>
+    <button data-page="premium" id="premiumMenuItem"><span class="metallic-star chat-star-icon premium-star-gold">★</span> <span class="premium-menu-item" id="premiumMenuLabel">Upgrade Premium</span></button>
+    <button data-page="about">ℹ️ About Alone2Lone</button>
+    <button data-page="terms">📄 Terms & Conditions</button>
+    <button data-page="privacy">🛡️ Privacy Policy</button>
+  </div>
+</header>
+
+<main>
+<section class="page active" id="home">
+  <div class="card hero">
+    <h1>From alone to your own circle. 🤝</h1>
+    <p>Meet people through interests, chat safely, and play together.</p>
+    <div class="row wrap">
+      <button class="primary" id="quickMatch">📹 Quick Video Match</button>
+      <button class="secondary" id="advancedMatch">🔎 Find your vibe</button>
+    </div>
+  </div>
+
+  <div class="section-head"><h2>Suggested Chats</h2><span class="muted" id="resultCount"></span></div>
+  <div class="card">
+    <input class="search" id="suggestedSearch" placeholder="Search by name or A2L ID…" autocomplete="off">
+  </div>
+  <div class="people" id="people"></div>
+</section>
+
+
+<section class="page" id="chats">
+  <div class="chat-selection-toolbar" id="chatSelectionToolbar">
+    <button class="chat-selection-cancel" id="chatSelectionCancel" aria-label="Cancel selection">✕</button>
+    <span class="chat-selection-count" id="chatSelectionCount">0 selected</span>
+    <button class="chat-selection-delete" id="chatSelectionDelete" aria-label="Delete selected chats">🗑️ Delete</button>
+  </div>
+  <h1 class="title">Chats</h1><p class="sub">Your conversations, all in one place.</p>
+  <div class="chat-category-tabs" id="chatCategoryTabs" role="tablist" aria-label="Chat categories">
+    <button class="chat-category-tab active" data-chat-category="friends" type="button" role="tab">🤝 Friends</button>
+    <button class="chat-category-tab" data-chat-category="strangers" type="button" role="tab">🌐 Strangers</button>
+    <button class="chat-category-tab" data-chat-category="requests" type="button" role="tab">📩 Requests</button>
+  </div>
+  <div class="chat-list-wrap">
+    <div class="chatlist" id="chatList"></div>
+    <button class="chat-new-fab" id="newFriendChat" type="button" aria-label="New chat with a friend" title="New chat">＋</button>
+  </div>
+</section>
+
+<section class="page" id="games">
+  <h1 class="title">Games 🎮</h1>
+  <p class="sub">Play quick games while getting to know your friends.</p>
+  <div class="games">
+    <button class="game" data-game="ttt"><span style="font-size:28px">❌⭕</span><strong>Tic-Tac-Toe</strong><span class="muted">Two-player mini game</span></button>
+    <button class="game" data-game="quiz"><span style="font-size:28px">🧠</span><strong>Quick Quiz</strong><span class="muted">Test your knowledge</span></button>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">More games coming</h3>
+    <p class="muted">The games section is separate so Home stays focused on finding and connecting with people.</p>
+  </div>
+</section>
+
+<section class="page" id="profile">
+  <h1 class="title">Profile</h1>
+  <p class="sub">Make your A2L profile easy to recognize and easy to find.</p>
+
+  <div class="card a2l-profile-hero">
+    <div class="a2l-profile-top">
+      <div class="a2l-avatar-edit-wrap">
+        <button class="a2l-profile-avatar" id="profileAvatarPreview" title="View profile photo" aria-label="Profile photo">💻</button>
+        <button class="a2l-avatar-edit-btn" id="profileEditTop" type="button" aria-label="Change profile photo" title="Change profile photo">✎</button>
+      </div>
+      <div class="a2l-profile-main">
+        <div class="a2l-profile-name-row">
+          <div class="a2l-profile-name-block">
+            <h2 id="profileDisplayName">You</h2>
+            <div class="a2l-id-line"><span class="a2l-id-label">A2L ID</span><strong id="profileA2LId">@a2l_user_4827</strong></div>
+          </div>
+          <button class="secondary a2l-profile-edit-btn" id="profileEditMain" type="button">Edit</button>
+        </div>
+      </div>
+    </div>
+    <div class="a2l-profile-actions" style="margin-top:14px"><div class="a2l-like-box" style="flex:1"><span class="a2l-like-count" id="profileLikeCount">❤️ 0 Likes</span><span class="muted" id="profileConnectionStatus">Open to new connections</span></div></div>
+  </div>
+
+  <div class="card profile-friends-card" id="profileFriendsCard">
+    <div class="row between profile-friends-head">
+      <div><h3 style="margin:0">🤝 Friends</h3><p class="muted" style="margin:4px 0 0">People you’ve connected with.</p></div>
+      <button class="secondary profile-friends-open" id="profileFriendsOpen" type="button">View all</button>
+    </div>
+    <div class="profile-friends-list" id="profileFriendsList"></div>
+    <div class="profile-reconnect">
+      <div class="row between"><div><b>🔄 Reconnect</b><p class="muted" style="margin:3px 0 0">People you’ve met before.</p></div></div>
+      <div class="profile-reconnect-list" id="profileReconnectList"></div>
+    </div>
+  </div>
+
+  <div class="card a2l-profile-public" id="profilePublicDetails">
+    <div class="profile-public-section">
+      <h3>📝 Introduction</h3>
+      <p class="profile-public-value" id="profileBioPreview">Friendship-first • Here to meet interesting people.</p>
+    </div>
+    <div class="profile-public-section">
+      <h3>🎯 Interests</h3>
+      <div class="profile-public-chips" id="profileInterestsPreview"></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" id="profileEditPage">
+  <div class="profile-edit-page-head">
+    <button class="secondary profile-page-back" id="profileEditBack" type="button">‹ Back</button>
+    <div><h1 class="title" style="margin:0">Edit Profile</h1><p class="sub" style="margin:4px 0 0">Update the details people see on your profile.</p></div>
+  </div>
+
+  <div class="card profile-edit-page-card">
+    <div class="setting">
+      <h3>🪪 Name</h3>
+      <p>Choose the name people see on your profile.</p>
+      <input class="search profile-input" id="profileNameInput" maxlength="24" placeholder="Display name">
+    </div>
+
+    <div class="setting">
+      <h3>🔎 A2L ID</h3>
+      <p>People can search this ID to find your profile directly.</p>
+      <div class="a2l-id-edit"><span>@</span><input class="search profile-input" id="profileIdInput" maxlength="20" placeholder="your_a2l_id"></div>
+      
+    </div>
+
+    <div class="setting">
+      <h3>📝 Introduction</h3>
+      <p>A short introduction helps people know what you are about.</p>
+      <textarea class="search profile-input profile-bio-input" id="profileBioInput" maxlength="140" rows="3" placeholder="Tell people a little about yourself..."></textarea>
+    </div>
+
+    <div class="setting profile-edit-section">
+      <h3>🎯 Interests</h3><p class="muted">Pick a few things you enjoy.</p>
+      <div class="profile-choice-grid" id="profileInterests"></div>
+    </div>
+
+    <div class="setting profile-edit-section">
+      <h3>👀 Profile visibility</h3>
+      <p class="muted">Choose whether people can discover your profile through Search and Suggested Chats.</p>
+      <div class="profile-info-row"><span>Discovery</span><strong id="profileVisibilityLabel">Public</strong></div>
+      <button class="secondary profile-small-btn" id="profileVisibilityToggle" type="button">Make private</button>
+    </div>
+
+    <div class="profile-edit-section"><button class="primary profile-save-btn" id="profileSave" type="button">Save Profile</button></div>
+  </div>
+</section>
+
+
+<div class="a2l-avatar-modal" id="avatarModal" hidden>
+  <div class="a2l-avatar-modal-backdrop" id="avatarModalBackdrop"></div>
+  <div class="card a2l-avatar-modal-card" role="dialog" aria-modal="true" aria-labelledby="avatarModalTitle">
+    <div class="profile-editor-title-row"><div><h3 id="avatarModalTitle" style="margin:0">Profile photo</h3><p class="muted" style="margin:4px 0 0">Choose a photo or use an avatar.</p></div><button class="secondary profile-close-btn" id="avatarModalClose" type="button">Done</button></div>
+    <div class="profile-photo-preview-stage">
+      <div class="profile-photo-preview-circle" id="profilePhotoPreviewWrap">💻</div>
+    </div>
+    <div class="profile-photo-action-row">
+      <button class="profile-photo-action" id="profileGalleryBtn" type="button" aria-label="Choose from gallery"><span class="profile-photo-action-icon">▣</span><span class="profile-photo-action-label">Gallery</span></button>
+      <button class="profile-photo-action" id="profileCameraBtn" type="button" aria-label="Take a photo"><span class="profile-photo-action-icon">◉</span><span class="profile-photo-action-label">Camera</span></button>
+    </div>
+    <input id="profileGalleryInput" type="file" accept="image/*" hidden>
+    <input id="profileCameraInput" type="file" accept="image/*" capture="user" hidden>
+    <div class="profile-avatar-divider"></div>
+    <p class="profile-avatar-heading">Or choose an avatar</p>
+    <div class="avatar-picker" id="avatarPicker"></div>
+  </div>
+</div>
+
+<div class="a2l-crop-modal" id="profileCropModal" hidden aria-hidden="true">
+  <div class="a2l-crop-backdrop" id="profileCropBackdrop"></div>
+  <div class="card a2l-crop-card" role="dialog" aria-modal="true" aria-labelledby="profileCropTitle">
+    <div class="profile-editor-title-row"><div><h3 id="profileCropTitle" style="margin:0">Crop photo</h3><p class="muted" style="margin:4px 0 0">Use your fingers to move, zoom and rotate.</p></div><button class="secondary profile-close-btn" id="profileCropCancel" type="button">Cancel</button></div>
+    <div class="crop-stage" id="profileCropStage"><canvas id="profileCropCanvas" width="320" height="320"></canvas><div class="crop-frame" aria-hidden="true"></div><div class="crop-touch-hint" aria-hidden="true">1 finger: move · 2 fingers: zoom & rotate</div></div>
+    <div class="crop-actions"><button class="secondary" id="profileCropReset" type="button">Reset</button><button class="primary" id="profileCropApply" type="button">Use photo</button></div>
+  </div>
+</div>
+
+<section class="page" id="settings">
+  <h1 class="title">Settings</h1><p class="sub">Control your local demo experience.</p>
+  <div class="card">
+    <div class="setting"><h3>🎨 Appearance</h3><p>Choose light or dark mode.</p><button class="secondary" id="toggleTheme">Toggle theme</button></div>
+    <div class="setting"><h3>🕶️ Incognito discovery</h3><p>Hide your demo profile from the people list.</p><button class="secondary" id="toggleIncognito">Enable incognito</button></div>
+    <div class="setting"><h3>🔒 Privacy & communication</h3><p>Choose who can message and call you. These controls are saved locally in this prototype.</p>
+      <label>Who can message me <select id="privacyMessage"><option value="everyone">Everyone</option><option value="connected">People I've Connected With</option><option value="approved">People I Approve</option><option value="nobody">No one</option></select></label>
+      <label>Who can call me <select id="privacyCall"><option value="everyone">Everyone</option><option value="connected">Connections only</option><option value="nobody">Nobody</option></select></label>
+      <label class="checkline"><input type="checkbox" id="privacyRequests"> Allow message requests</label>
+      <label class="checkline"><input type="checkbox" id="privacySearch"> Show me in Search</label>
+    </div>
+    <div class="setting"><h3>🔔 Online-only call notifications</h3><p>Incoming call notifications are created only for online users. Offline users do not receive queued call notifications.</p><button class="secondary" id="enableCallNotifications">Enable call notifications</button><span class="muted" id="notificationStatus"></span></div>
+    <div class="setting"><h3>📱 Display</h3><p>Responsive layout automatically adapts to phone and laptop screens.</p></div>
+    <div class="setting"><h3>🧹 Local data</h3><p>Chats and settings in this prototype are stored in this browser.</p><button class="danger" id="clearData">Clear local data</button></div>
+  </div>
+</section>
+
+<section class="page" id="history">
+  <div class="row between"><div><h1 class="title">Chat History</h1><p class="sub">Your conversations on this browser.</p></div><button class="secondary" id="clearHistory">Clear</button></div>
+  <div class="chatlist" id="historyList"></div>
+</section>
+
+<section class="page" id="premium">
+  <h1 class="title">Premium Features</h1><p class="sub">Useful upgrades built around better matching, retention and control.</p>
+  <div class="card">
+    <div class="premium-activate-top">
+      <button class="primary premium-demo-btn" id="upgrade">Activate Premium Demo <span class="metallic-star premium-button-star" aria-hidden="true">★</span></button>
+      <p id="premiumNote" class="premium-note" aria-live="polite"></p>
+    </div>
+    <div class="setting"><h3>🔎 Advanced matching</h3><p>Combine interest + online filters to narrow people instantly.</p><button class="secondary premiumAction" data-feature="matching">Use now</button></div>
+    <div class="setting"><h3>🕶️ Incognito mode</h3><p>Hide your profile from discovery while keeping your chats.</p><button class="secondary premiumAction" data-feature="incognito">Toggle</button></div>
+    <div class="setting"><h3>🎨 Custom themes</h3><p>Switch the interface between light and dark mode.</p><button class="secondary premiumAction" data-feature="theme">Toggle theme</button></div>
+    <div class="setting"><h3>🧹 Chat cleanup</h3><p>Clear a conversation directly from your local chat history.</p><button class="secondary premiumAction" data-feature="cleanup">Manage chats</button></div>
+    <div class="setting"><h3>🤝 Reconnect opportunities</h3><p>Keep useful connections close instead of losing good conversations after a session.</p><button class="secondary premiumAction" data-feature="reconnect">View your circle</button></div>
+    <div class="setting"><h3>🎮 Game stats</h3><p>Track your local quiz and game activity.</p><button class="secondary premiumAction" data-feature="stats">View stats</button></div>
+  </div>
+</section>
+
+<section class="page" id="about">
+  <h1 class="title">About Alone2Lone</h1><p class="sub">A friendship-first place to connect, chat and play.</p>
+  <div class="card"><h2>Why Alone2Lone?</h2><p class="muted">The idea is simple: turn “alone” into your own circle of people.</p>
+  <div class="feature-grid"><div class="setting"><b>🤝 Friendship-first</b><p>Meet through shared interests.</p></div><div class="setting"><b>🛡️ Safety-focused</b><p>Blocking, reporting and privacy controls belong at the core.</p></div><div class="setting"><b>🎮 Play together</b><p>Games can make starting a conversation easier.</p></div></div></div>
+</section>
+
+<section class="page" id="terms">
+  <h1 class="title">Terms & Conditions</h1><p class="sub">Prototype terms.</p>
+  <div class="card"><div class="setting"><h3>1. Respect others</h3><p>Harassment, threats, spam and abusive behaviour are not allowed.</p></div><div class="setting"><h3>2. Protect private information</h3><p>Do not share passwords, phone numbers, addresses or sensitive information.</p></div><div class="setting"><h3>3. Games</h3><p>Use games responsibly and respectfully.</p></div><div class="setting"><h3>4. Prototype notice</h3><p>This single-file demo uses browser-local storage and cross-tab events for prototype interactions; it has no production real-time backend, accounts or payment processing.</p></div></div>
+</section>
+
+<section class="page" id="privacy">
+  <h1 class="title">Privacy Policy</h1><p class="sub">How this prototype handles information.</p>
+  <div class="card"><div class="setting"><h3>Local storage</h3><p>Demo chat data is stored locally in your browser.</p></div><div class="setting"><h3>Phone protection</h3><p>Messages containing phone-number-like 10-digit sequences are rejected, and displayed phone digits are masked.</p></div><div class="setting"><h3>No real account system</h3><p>This prototype does not send your demo profile or chats to a server.</p></div><div class="setting"><h3>Production version</h3><p>A live service should use secure authentication, encrypted transport, proper database security, moderation and a complete legal privacy policy.</p></div></div>
+</section>
+
+<section class="page" id="hub">
+  <h1 class="title">A2L Rooms 🌐</h1>
+  <p class="sub">Activity-first rooms for live social sessions.</p>
+  <div class="card">
+    <button class="primary" id="hubRooms" type="button">🏠 Open A2L Rooms</button>
+  </div>
+  <div class="card" id="hubContent" hidden></div>
+</section>
+
+<section class="page" id="rooms">
+  
+  <div id="roomsContent"></div>
+</section>
+
+<section class="page" id="roomdetail">
+  <button class="secondary back" id="roomDetailBack">← Back to Rooms</button>
+  <div id="roomDetailContent"></div>
+</section>
+
+<section class="page" id="roomsession">
+  <button class="secondary room-leave-btn" id="roomLeave">Leave Room</button>
+  <div id="roomSessionContent"></div>
+</section>
+
+<section class="page" id="grouproom">
+  <button class="secondary back" id="groupBack">← Back to Hub</button>
+  <div id="groupStage"></div>
+</section>
+
+<section class="page" id="gameplay">
+  <button class="secondary back" id="gameBack">← Back</button>
+  <div id="gameStage"></div>
+</section>
+
+<section class="page" id="chat">
+  <button class="secondary back" id="chatBack">← Back to Chats</button>
+  <div id="chatStage"></div>
+</section>
+</main>
+
+<nav class="bottom">
+ <div class="bottomin">
+  <button class="navbtn active" data-page="home"><div>⌂</div>Home</button>
+  <button class="navbtn" data-page="chats"><div>💬</div>Chats</button>
+  <button class="navbtn" data-page="rooms"><div>🌐</div>A2L Rooms</button>
+  <button class="navbtn" data-page="games"><div>🎮</div>Games</button>
+  <button class="navbtn" data-page="profile"><div>👤</div>Profile</button>
+ </div>
+</nav>
+
+<div class="confirm-overlay" id="chatConfirm" role="dialog" aria-modal="true" aria-labelledby="chatConfirmTitle">
+  <div class="confirm-card">
+    <div class="confirm-icon">💬</div>
+    <h2 id="chatConfirmTitle">Leave this chat?</h2>
+    <p id="chatConfirmText">Chat will be locked after ending. Premium is required to access it again.</p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" id="chatConfirmNo">No, stay</button>
+      <button class="confirm-yes" id="chatConfirmYes">Yes, end chat</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="a2l-match-modal" id="matchModal" aria-hidden="true">
+  <div class="card a2l-match-card a2l-match-clean" role="dialog" aria-modal="true" aria-labelledby="matchTitle">
+    <div class="a2l-match-head"><div><span class="a2l-eyebrow">A2L MATCH</span><h2 id="matchTitle" style="margin:3px 0 0">Find your vibe ✨</h2><p class="muted" style="margin:5px 0 0">Choose how you want to meet. We’ll handle the rest.</p></div><button class="secondary a2l-round-close" id="matchClose" type="button" aria-label="Close">✕</button></div>
+    <input type="hidden" id="matchMode" value="any">
+    <div class="a2l-match-primary" aria-label="Connection style">
+      <button class="a2l-vibe-choice" data-match-mode="video" type="button"><span>📹</span><b>Video</b><small>Meet face to face</small></button>
+      <button class="a2l-vibe-choice" data-match-mode="voice" type="button"><span>🎙️</span><b>Voice</b><small>Talk without video</small></button>
+      <button class="a2l-vibe-choice" data-match-mode="text" type="button"><span>💬</span><b>Chat</b><small>Start with messages</small></button>
+    </div>
+    <button class="a2l-filter-toggle" id="matchFiltersToggle" type="button" aria-expanded="false"><span>⚙️ More filters</span><span id="matchFilterChevron">⌄</span></button>
+    <div class="a2l-filter-drawer" id="matchFilterDrawer" hidden>
+      <div class="a2l-filter-grid">
+        <label>Language<select id="matchLanguage"><option value="any">Any language</option><option value="english">English</option><option value="hindi">Hindi</option><option value="both">English + Hindi</option></select></label>
+        <label>Age group<select id="matchAge"><option value="same">Same age group</option><option value="any">Any available age group</option></select></label>
+        <label class="a2l-filter-wide">Interest<select id="matchInterest"><option value="any">Any interest</option><option>Gaming</option><option>Music</option><option>Coding</option><option>Art</option><option>Movies</option><option>Reading</option><option>Sports</option><option>Travel</option><option>Photography</option><option>Memes</option></select></label>
+        <label class="a2l-check a2l-filter-wide"><input type="checkbox" id="matchOnline" checked> Online people only</label>
+      </div>
+    </div>
+    <div class="a2l-match-safe">🛡️ Safer matching stays within age groups in this prototype.</div>
+    <div id="matchResult"></div>
+    <div class="a2l-match-actions"><button class="secondary" id="matchCancel" type="button">Cancel</button><button class="primary" id="matchStart" type="button">✨ Find someone</button></div>
+  </div>
+</div>
+
+<div class="a2l-modal" id="playRequestModal" aria-hidden="true">
+  <div class="card a2l-modal-card" role="dialog" aria-modal="true" aria-labelledby="playRequestTitle">
+    <div class="row between"><div><h2 id="playRequestTitle" style="margin:0">Play together 🎮</h2><p class="muted" id="playRequestSub" style="margin:5px 0 0"></p></div><button class="secondary" id="playRequestClose" type="button">✕</button></div>
+    <div class="a2l-option-grid play-game-options" id="playGameOptions"><button class="a2l-option selected" data-play-game="ttt"><b>❌⭕ Tic-Tac-Toe</b><small>Quick 2-player game</small></button><button class="a2l-option" data-play-game="quiz"><b>🧠 Quick Quiz</b><small>Fast turn-based quiz</small></button></div>
+    <div class="a2l-match-actions"><button class="secondary" id="playRequestCancel">Cancel</button><button class="primary" id="sendPlayRequest">🎮 Send request</button></div>
+  </div>
+</div>
+<div class="a2l-modal" id="incomingRequestModal" aria-hidden="true">
+  <div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Incoming request 🔔</h2><p class="muted" id="incomingRequestText" style="margin:5px 0 0"></p></div><button class="secondary" id="incomingClose">✕</button></div><div id="incomingRequestActions" class="a2l-request-actions" style="margin-top:16px"><button class="secondary" id="declineIncoming">Decline</button><button class="primary" id="acceptIncoming">Accept & play</button></div></div>
+</div>
+<div class="a2l-modal" id="switchModeModal" aria-hidden="true">
+  <div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Switch mode 🔀</h2><p class="muted" style="margin:5px 0 0">Change how you interact without leaving the session.</p></div><button class="secondary" id="switchModeClose">✕</button></div><div class="a2l-option-grid" style="margin-top:16px"><button class="a2l-option" data-switch-mode="video">📹 Video</button><button class="a2l-option" data-switch-mode="voice">🎙️ Voice</button><button class="a2l-option" data-switch-mode="text">💬 Text</button></div></div>
+</div>
+<div class="a2l-modal" id="challengeModal" aria-hidden="true"><div class="card a2l-modal-card"><h2 style="margin-top:0">Two-person challenge 🎯</h2><p class="muted">Pick a quick activity for both of you.</p><div class="a2l-option-grid"><button class="a2l-option" data-challenge="question">💭 Same-answer question</button><button class="a2l-option" data-challenge="emoji">😂 Emoji reaction challenge</button><button class="a2l-option" data-challenge="word">🔤 Word challenge</button><button class="a2l-option" data-challenge="draw">🎨 Draw the same thing</button></div><button class="secondary" id="challengeClose" style="margin-top:12px;width:100%">Close</button></div></div>
+<div class="a2l-modal" id="chatActionsModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Chat actions</h2><p class="muted" style="margin:5px 0 0">Less clutter. Your occasional actions live here.</p></div><button class="secondary" id="chatActionsClose">✕</button></div><div class="chat-action-sheet"><button class="chat-action-item" id="actionConnect">＋ Add Friend<small>Build your circle</small></button><button class="chat-action-item" id="actionReconnect">🔄 Reconnect<small>Continue a past connection</small></button><button class="chat-action-item" id="actionChallenge">🎯 Challenge<small>Start a quick activity</small></button><button class="chat-action-item" id="actionSurprise">🎲 Surprise Us<small>Let A2L choose</small></button><button class="chat-action-item" id="actionCulture">🌍 Culture<small>Start a culture prompt</small></button><button class="chat-action-item" id="actionProfile">👤 Profile<small>View their details</small></button><button class="chat-action-item" id="actionReport">⚑ Report<small>Report a problem</small></button><button class="chat-action-item" id="actionBlock">⛔ Block<small>Remove and block</small></button></div></div></div>
+<div class="a2l-modal" id="newFriendChatModal" aria-hidden="true">
+  <div class="card a2l-modal-card new-friend-chat-card" role="dialog" aria-modal="true" aria-labelledby="newFriendChatTitle">
+    <div class="row between">
+      <div><h2 id="newFriendChatTitle" style="margin:0">New Chat</h2><p class="muted" style="margin:5px 0 0">Choose a friend to start a new conversation.</p></div>
+      <button class="secondary" id="newFriendChatClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <div id="newFriendChatList" class="new-friend-chat-list" style="margin-top:14px"></div>
+  </div>
+</div>
+<div class="a2l-modal" id="chatWallpaperModal" aria-hidden="true"><div class="card a2l-modal-card a2l-wallpaper-card"><div class="row between"><div><h2 style="margin:0">Chat Wallpaper</h2><p class="muted" style="margin:5px 0 0">Choose a look for this conversation.</p></div><button class="secondary" id="chatWallpaperClose" type="button" aria-label="Close">✕</button></div><div class="wallpaper-grid" id="wallpaperGrid"></div><div class="wallpaper-confirm-actions"><button class="secondary" id="chatWallpaperCancel" type="button">Cancel</button><button class="primary" id="chatWallpaperConfirm" type="button">✓ Apply wallpaper</button></div></div></div>
+<div class="a2l-modal" id="connectionRequestModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Connection request 🤝</h2><p class="muted" id="connectionRequestText" style="margin:5px 0 0"></p></div><button class="secondary" id="connectionRequestClose">✕</button></div><div class="a2l-request-status">Accepting creates a <b>Connected</b> relationship. Removing it later is a deliberate action.</div><div class="a2l-match-actions"><button class="secondary" id="declineConnection">Decline</button><button class="primary" id="acceptConnection">Accept 🤝</button></div></div></div>
+<div class="a2l-modal" id="chatCallModal" aria-hidden="true"><div class="card a2l-modal-card call-modal-card"><div class="row between"><div><h2 id="chatCallTitle" style="margin:0">Start a call</h2><p class="muted" id="chatCallSub" style="margin:5px 0 0">Choose how you want to connect.</p></div><button class="secondary" id="chatCallClose">✕</button></div><div id="callChooser" class="a2l-option-grid" style="margin-top:16px"><button class="a2l-option" id="startVideoCall">📹 Video call<br><small class="muted">Camera + microphone</small></button><button class="a2l-option" id="startVoiceCall">🎙️ Voice call<br><small class="muted">Microphone only</small></button></div><div class="a2l-match-hint" id="callHint">Calls are online-only. Live media is not recorded or stored.</div></div></div>
+<div class="a2l-live-modal" id="matchSessionModal" aria-hidden="true"><div class="a2l-live-shell"><div class="a2l-live-topbar"><button class="a2l-live-icon" id="matchBack" aria-label="Back">‹</button><div class="a2l-live-title"><b id="matchSessionTitle">Video Match</b><span id="matchSessionStatus">Connecting…</span></div><button class="a2l-live-icon" id="matchMore" aria-label="More">⋮</button></div><div class="a2l-live-video-area" id="videoMatchArea"><div class="a2l-peer-panel" id="remotePanel"><video id="remoteMatchVideo" autoplay playsinline></video><div class="a2l-peer-fallback" id="remoteFallback"><div class="a2l-match-avatar" id="remoteMatchAvatar">🙂</div><b id="remoteMatchName">A2L user</b><span id="remoteMatchMeta">Waiting for video…</span></div></div><div class="a2l-peer-panel local" id="localPanel"><video id="localMatchVideo" autoplay playsinline muted></video><div class="a2l-peer-fallback local-fallback" id="localFallback"><div class="a2l-match-avatar" id="localMatchAvatar">💻</div><b>Me</b><span id="localMatchMeta">Camera on</span></div><button class="a2l-add-friend" id="matchAddFriend">＋ Add Friend</button></div></div><div class="a2l-live-voice-area" id="voiceMatchArea" hidden><div class="a2l-voice-peer"><div class="a2l-match-avatar" id="voiceRemoteAvatar">🙂</div><b id="voiceRemoteName">A2L user</b><span id="voiceRemoteMeta">Connecting…</span><span class="a2l-audio-ring" id="remoteAudioRing"></span></div><div class="a2l-voice-peer mine"><div class="a2l-match-avatar" id="voiceLocalAvatar">💻</div><b>Me</b><span id="voiceLocalMeta">Listening…</span><span class="a2l-audio-ring" id="localAudioRing"></span><button class="a2l-add-friend" id="voiceAddFriend">＋ Add Friend</button></div></div><div class="a2l-reaction-layer" id="matchReactionLayer" aria-hidden="true"></div><div class="a2l-live-controls" id="videoControls"><button id="matchMute" title="Mute microphone">🎙️</button><button id="matchCamera" title="Camera on/off">📹</button><button id="matchSwitchCamera" title="Switch camera">🔄</button><button id="matchVoiceSwitch" title="Switch to voice">🎙️</button><button id="matchReaction" title="Send reaction">❤️</button><button class="end" id="matchEnd" title="End call">✕</button></div><div class="a2l-live-controls" id="voiceControls" hidden><button id="voiceMute" title="Mute microphone">🎙️</button><button id="voiceVideoSwitch" title="Switch to video">📹</button><button id="voiceReaction" title="Send reaction">❤️</button><button class="end" id="voiceEnd" title="End call">✕</button></div><div class="a2l-reaction-picker" id="reactionPicker" hidden><button>❤️</button><button>😂</button><button>😮</button><button>👍</button><button>👏</button><button>🔥</button></div></div></div>
+<div class="a2l-modal" id="matchMoreModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">More</h2><p class="muted" id="matchMoreSub" style="margin:5px 0 0">Safety and connection options</p></div><button class="secondary" id="matchMoreClose">✕</button></div><div class="chat-action-sheet"><button class="chat-action-item" id="matchConnect">🤝 Friend Request<small>Build your circle</small></button><button class="chat-action-item" id="matchReport">⚑ Report<small>Report a problem</small></button><button class="chat-action-item" id="matchBlock">⛔ Block<small>Remove and block</small></button></div></div></div>
+<div class="a2l-modal" id="activityModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Activity 🔔</h2><p class="muted" style="margin:5px 0 0">Requests and invitations waiting for you.</p></div><button class="secondary" id="activityClose">✕</button></div><div id="activityContent"></div></div></div>
+<div class="a2l-modal" id="hubPopupModal" aria-hidden="true">
+  <div class="card a2l-modal-card hub-popup-card" role="dialog" aria-modal="true" aria-labelledby="hubPopupTitle">
+    <div class="row between"><div><h2 id="hubPopupTitle" style="margin:0">Your Circle</h2><p class="muted" id="hubPopupSub" style="margin:5px 0 0"></p></div><button class="secondary" id="hubPopupClose" type="button" aria-label="Close">✕</button></div>
+    <div id="hubPopupContent" style="margin-top:14px"></div>
+  </div>
+</div>
+<div class="a2l-like-burst" id="likeBurst" aria-hidden="true"></div>
+<div class="a2l-chat-reaction" id="chatReaction" aria-hidden="true"><div class="a2l-chat-reaction-emoji" id="chatReactionEmoji"></div></div>
+<div class="toast" id="toast"></div>
+</div>
+  
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/matching.js"></script>
+<script src="js/realtime.js"></script>
+<script src="js/calls.js"></script>
+<script src="js/games.js"></script>
+<script src="js/hub.js"></script>
+<script src="js/app.js"></script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
+</body>
+</html>
+
