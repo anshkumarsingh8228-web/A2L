@@ -1,0 +1,120 @@
+{
+  "phase": "12-final",
+  "files": [
+    {
+      "path": "ARCHIVE_MANIFEST.txt",
+      "sha256": "8312309a88221ae5a4ae9c2d7e26c5f86396e8aef76fddaf03f30524af6fb2a4",
+      "bytes": 80
+    },
+    {
+      "path": "README.md",
+      "sha256": "ee0617b73b18711221c4abc02413ae87c237fa26d355e3ac47b136a8a2932b06",
+      "bytes": 1251
+    },
+    {
+      "path": "app.js",
+      "sha256": "bd57b00e4ebb07f01312f37b3eeb0ec335d801439b0434f779250ad92b2da892",
+      "bytes": 29455
+    },
+    {
+      "path": "auth.js",
+      "sha256": "11cdef2558accfcc60cad148a067013c40e6713a061cfefccfcd6ad0a9513829",
+      "bytes": 1158
+    },
+    {
+      "path": "calls.js",
+      "sha256": "6b442765ad0f831960fc63eaa4c8b70da049e5103d86073c6b12dee86b8399c1",
+      "bytes": 735
+    },
+    {
+      "path": "chat-realtime.js",
+      "sha256": "55b2425e02363945b4ffde390b256f83e4d081583e59f6274a92b064f35b20cc",
+      "bytes": 1913
+    },
+    {
+      "path": "chat.js",
+      "sha256": "0b50f81fc82c79b137eb72a3137d663a372f333876a2968a5f4e5ccb98e7e7a0",
+      "bytes": 31755
+    },
+    {
+      "path": "games.js",
+      "sha256": "cf7505a0219d23a77bde6fb1c828108c8d629385e9878e0b3fb4b7928bf85cc8",
+      "bytes": 14258
+    },
+    {
+      "path": "hub.js",
+      "sha256": "b3df26287ac1ce6801895b8c390fd5f6f278f2656476e28a6dc15cabbdb4fc72",
+      "bytes": 21214
+    },
+    {
+      "path": "index.html",
+      "sha256": "11be770e283e84d1e9bca2bf95470b9e2a32e1b3c0e113066d6e1a5214ce9749",
+      "bytes": 33865
+    },
+    {
+      "path": "matching.js",
+      "sha256": "52f08ea8ef33ffd9e89bd7d25afc05bafe7bd7f77dcf2dae61a409de751298dc",
+      "bytes": 4601
+    },
+    {
+      "path": "package.json",
+      "sha256": "5dc1efab5a05b30fb98d7d429b0797789bf4317bf2df046af6797c58a1e6d707",
+      "bytes": 283
+    },
+    {
+      "path": "plans.js",
+      "sha256": "ebf32903c47ad82f2437942c25201fe202065d966444cebaedbb66678bf73441",
+      "bytes": 903
+    },
+    {
+      "path": "previous-checksums.txt",
+      "sha256": "e65d8750b69c728faeaf0c97c986a1053faa0867c85565658482b9b2cd13ee02",
+      "bytes": 1320
+    },
+    {
+      "path": "profile.js",
+      "sha256": "7736056b2e1a13eef5c55585daa7c1daf5d3b3e2a09e57c22778c578b1b11ddd",
+      "bytes": 7116
+    },
+    {
+      "path": "realmatch.js",
+      "sha256": "bcc89ca70e0c4ce553f00fcc41ee7856b68b0c1ff8dc5bdeeb85327ee12f8570",
+      "bytes": 22479
+    },
+    {
+      "path": "realtime.js",
+      "sha256": "0e519f431041e7f792b9c333f612b7cbb028febe317baf69e61f615ac0586406",
+      "bytes": 4184
+    },
+    {
+      "path": "render.yaml",
+      "sha256": "1b60e3a10be82a48f498d00f11a10dbfd9e9c3992f0bfbc3239b9cfc0acc5527",
+      "bytes": 273
+    },
+    {
+      "path": "safety.js",
+      "sha256": "db32e065925644409ab3e586cdf8b4ac621febe18b11fa94e67bcae4b41ae47d",
+      "bytes": 1503
+    },
+    {
+      "path": "server.js",
+      "sha256": "57ff95d1eb25e76b63be25b2486081620578fa4bb4ac897a684e16819623ef38",
+      "bytes": 13498
+    },
+    {
+      "path": "social.js",
+      "sha256": "3a3668e8703d05187d944d37417fa9c890c3c4a9f2f66bffc92ec75140d3e319",
+      "bytes": 6425
+    },
+    {
+      "path": "style.css",
+      "sha256": "e1f64436da357d32b7b464b5ef41bc47bd782adc5edfac29c4efdbeb17e3eb09",
+      "bytes": 128606
+    },
+    {
+      "path": "sw.js",
+      "sha256": "bfcc25c41cc3038cad189945b0b23bce9894850c04d07c9bfd924c795a296b8b",
+      "bytes": 599
+    }
+  ]
+}
