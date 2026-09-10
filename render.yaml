@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: a2l-realtime
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: AUTH_REQUIRED
+        value: "false"
