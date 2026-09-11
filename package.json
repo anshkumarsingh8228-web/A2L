@@ -1,0 +1,13 @@
+{
+  "name": "alone2lone-realtime",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0",
+    "ws": "^8.21.3"
+  }
+}
