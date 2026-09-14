@@ -5,14 +5,20 @@ const DATABASE_URL=process.env.DATABASE_URL||'';const SUPABASE_URL=(process.env.
 function resolveDatabaseUrl(rawUrl){
   if(!rawUrl)return '';
   try{
-    const u=new URL(rawUrl);
-    const m=u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    const m=rawUrl.match(/@db\.([a-z0-9]+)\.supabase\.co(:[0-9]+)?(\/.*)?$/i);
     if(m){
-      const ref=m[1], region=process.env.SUPABASE_REGION||'ap-northeast-1', poolPort=process.env.SUPABASE_POOLER_PORT||'5432';
-      u.hostname=`aws-0-${region}.pooler.supabase.com`;
-      if(!u.username.includes('.')) u.username=`${u.username}.${ref}`;
-      u.port=poolPort;
-      return u.toString();
+      const ref=m[1], region=process.env.SUPABASE_REGION||'ap-northeast-1', poolPort=process.env.SUPABASE_POOLER_PORT||'5432', rest=m[3]||'/postgres';
+      let prefix=rawUrl.slice(0,m.index);
+      const sIdx=prefix.indexOf('://');
+      if(sIdx!==-1){
+        const creds=prefix.slice(sIdx+3);
+        const cIdx=creds.indexOf(':');
+        const user=cIdx!==-1?creds.slice(0,cIdx):creds;
+        if(!user.includes('.')){
+          prefix=prefix.slice(0,sIdx+3)+user+'.'+ref+(cIdx!==-1?creds.slice(cIdx):'');
+        }
+      }
+      return `${prefix}@aws-0-${region}.pooler.supabase.com:${poolPort}${rest}`;
     }
   }catch(e){console.warn('resolveDatabaseUrl error:',e.message);}
   return rawUrl;
