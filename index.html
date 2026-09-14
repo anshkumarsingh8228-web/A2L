@@ -18,6 +18,7 @@
   </div>
   <div class="menu" id="moreMenu">
     <button data-page="settings">⚙️ Settings</button>
+    <button id="menuNotificationsBtn" type="button">🔔 Notifications</button>
     <button data-page="premium" id="premiumMenuItem"><span class="metallic-star chat-star-icon premium-star-gold">★</span> <span class="premium-menu-item" id="premiumMenuLabel">Upgrade Premium</span></button>
     <button data-page="about">ℹ️ About Alone2Lone</button>
     <button data-page="terms">📄 Terms & Conditions</button>
@@ -361,6 +362,38 @@
 <div class="a2l-modal" id="chatWallpaperModal" aria-hidden="true"><div class="card a2l-modal-card a2l-wallpaper-card"><div class="row between"><div><h2 style="margin:0">Chat Wallpaper</h2><p class="muted" style="margin:5px 0 0">Choose a look for this conversation.</p></div><button class="secondary" id="chatWallpaperClose" type="button" aria-label="Close">✕</button></div><div class="wallpaper-grid" id="wallpaperGrid"></div><div class="wallpaper-confirm-actions"><button class="secondary" id="chatWallpaperCancel" type="button">Cancel</button><button class="primary" id="chatWallpaperConfirm" type="button">✓ Apply wallpaper</button></div></div></div>
 <div class="a2l-modal" id="connectionRequestModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Connection request 🤝</h2><p class="muted" id="connectionRequestText" style="margin:5px 0 0"></p></div><button class="secondary" id="connectionRequestClose">✕</button></div><div class="a2l-request-status">Accepting creates a <b>Connected</b> relationship. Removing it later is a deliberate action.</div><div class="a2l-match-actions"><button class="secondary" id="declineConnection">Decline</button><button class="primary" id="acceptConnection">Accept 🤝</button></div></div></div>
 <div class="a2l-modal" id="chatCallModal" aria-hidden="true"><div class="card a2l-modal-card call-modal-card"><div class="row between"><div><h2 id="chatCallTitle" style="margin:0">Start a call</h2><p class="muted" id="chatCallSub" style="margin:5px 0 0">Choose how you want to connect.</p></div><button class="secondary" id="chatCallClose">✕</button></div><div id="callChooser" class="a2l-option-grid" style="margin-top:16px"><button class="a2l-option" id="startVideoCall">📹 Video call<br><small class="muted">Camera + microphone</small></button><button class="a2l-option" id="startVoiceCall">🎙️ Voice call<br><small class="muted">Microphone only</small></button></div><div class="a2l-match-hint" id="callHint">Calls are online-only. Live media is not recorded or stored.</div></div></div>
+<div class="a2l-modal" id="notificationsModal" aria-hidden="true">
+  <div class="card a2l-modal-card notifications-modal-card" style="max-width:480px;padding:20px;">
+    <div class="row between" style="margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:22px;">🔔</span>
+        <h2 style="margin:0;font-size:19px;">Notifications</h2>
+      </div>
+      <button class="secondary" id="notificationsModalClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="notif-perm-box" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <b style="font-size:13px;display:block;">Call & Alert Notifications</b>
+        <span class="muted" id="notificationsModalPermStatus" style="font-size:12px;">Browser notifications</span>
+      </div>
+      <button class="secondary" id="notificationsModalPermBtn" type="button" style="font-size:12px;padding:6px 12px;white-space:nowrap;">Enable</button>
+    </div>
+    <div id="notificationsList" class="notifications-list" style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding-right:2px;">
+      <div class="card empty" style="text-align:center;padding:24px 12px;color:var(--muted);">Loading notifications…</div>
+    </div>
+  </div>
+</div>
+<div class="a2l-modal" id="deleteChatModal" aria-hidden="true">
+  <div class="card a2l-modal-card" style="max-width:360px;text-align:center;padding:22px;margin:auto;">
+    <div style="font-size:36px;margin-bottom:10px;">🗑️</div>
+    <h3 id="deleteChatTargetName" style="margin:0 0 6px;font-size:18px;">Delete Chat</h3>
+    <p class="muted" id="deleteChatTargetSub" style="margin:0 0 20px;font-size:13px;line-height:1.4;">This will remove this conversation from your chat list.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="danger" id="confirmDeleteChatBtn" type="button" style="width:100%;padding:12px;font-weight:600;border-radius:12px;">Delete Chat</button>
+      <button class="secondary" id="cancelDeleteChatBtn" type="button" style="width:100%;padding:12px;border-radius:12px;">Cancel</button>
+    </div>
+  </div>
+</div>
 <div class="a2l-live-modal" id="matchSessionModal" aria-hidden="true">
   <div class="a2l-standalone-call screen" id="standaloneCall">
     <section class="finding-state a2l-call-finding" id="callFinding">

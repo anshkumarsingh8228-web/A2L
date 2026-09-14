@@ -24,6 +24,8 @@
     reconnectResponse:(requestId,accepted)=>api('/api/reconnect-response',{method:'POST',body:{requestId,accepted}}),
     sendMessage:(to,text)=>api('/api/message',{method:'POST',body:{to,text}}),
     markConversationRead:(to,conversationId)=>api('/api/conversation/read',{method:'POST',body:{to,conversationId}}),
+    clearConversation:to=>api('/api/conversation/clear',{method:'POST',body:{to}}),
+    markNotificationsRead:()=>api('/api/notifications/read',{method:'POST'}),
     notifications:()=>api('/api/notifications'),
     history:()=>api('/api/history'),
     requests:()=>api('/api/requests'),
@@ -169,6 +171,8 @@
       handleIncomingChatMessage(m);
     }else if(m.type==='messages-read'){
       handleMessagesReadEvent(m);
+    }else if(m.type==='messages-cleared'){
+      handleMessagesClearedEvent(m);
     }else if(m.type==='friend-request-received'){
       if(m.request){
         state.connectionRequests=state.connectionRequests||{};
@@ -199,6 +203,11 @@
       if(!isCurrentChatOpen){
         f.unreadCount=(f.unreadCount||0)+1;
       }
+    }
+
+    // Un-delete conversation if it was previously hidden/deleted
+    if(state.deletedChats&&state.deletedChats.length){
+      state.deletedChats=state.deletedChats.filter(x=>x!==senderA2L&&x!==f?.id&&x!==String(f?.id));
     }
 
     // Update conversation in state.chats
@@ -239,6 +248,27 @@
         renderMessages(targetKey);
       }
     }
+  }
+
+  function handleMessagesClearedEvent(m){
+    const senderA2L=m.by;
+    const f=friends.find(x=>x.a2lId===senderA2L);
+    const targetKey=f?f.id:senderA2L;
+    if(f){
+      f.lastMessage=null;
+      f.lastMessageAt=null;
+      f.unreadCount=0;
+    }
+    if(state.chats[targetKey]){
+      state.chats[targetKey].messages=[];
+    }
+    save();
+    const activePeerA2L=(typeof activeChatId==='string')?activeChatId:(friends.find(x=>x.id===activeChatId)?.a2lId);
+    if(activePeerA2L===senderA2L){
+      if(typeof renderMessages==='function')renderMessages(targetKey);
+      toast("Chat messages were cleared");
+    }
+    if(typeof renderChats==='function')renderChats();
   }
 
   window.addEventListener('a2l:notification',e=>{

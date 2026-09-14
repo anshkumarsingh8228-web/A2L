@@ -1672,3 +1672,29 @@ body.dark .friend-chatrow:hover {
   color: var(--muted);
 }
 
+/* Notifications modal & delete chat modal styles */
+#menuNotificationsBtn {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.notifications-modal-card {
+  width: min(500px, 94vw);
+  border-radius: 20px;
+}
+.notifications-list .person {
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.notifications-list .person:hover {
+  background: rgba(108, 92, 231, 0.06);
+  transform: translateY(-1px);
+}
+body.dark .notifications-list .person:hover {
+  background: #252945 !important;
+}
+.notif-perm-box {
+  background: var(--card);
+  border-color: var(--line);
+}
+

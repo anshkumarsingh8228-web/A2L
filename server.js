@@ -78,7 +78,9 @@ async function sb(path,method='GET',body=null,token=''){
   try{
     const r=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{method,headers,body:body?JSON.stringify(body):undefined});
     if(!r.ok)return null;
-    return await r.json();
+    if(r.status===204)return [];
+    const text=await r.text();
+    return text?JSON.parse(text):null;
   }catch(e){return null;}
 }
 const profileOf=c=>c?.profile||{};
@@ -95,7 +97,10 @@ async function verifyToken(token){
   authCache.set(token,{user,expires:Date.now()+30000});return user;
 }
 async function authContextFromUser(user,requestedId='',token=''){
-  if(!user?.id)return null;
+  if(!user?.id){
+    const id=cleanId(requestedId)||'a2l_guest';
+    return {user:{id:`anon_${id}`,email:null},a2lId:id,profile:null,token:token||''};
+  }
   const desired=cleanId(requestedId||user.user_metadata?.a2l_id||user.user_metadata?.username||'');
   const id=desired||`a2l_${user.id.slice(0,8)}`;
   try{
@@ -176,11 +181,29 @@ async function api(req,res,body){
      const r=await profileByA2L(parts[2],ctx.token);
      return json(res,200,r.rows[0]?publicPeerRow(r.rows[0]):null);
    }
-   if(req.method==='GET'&&parts[1]==='notifications'){
-     try{const r=await q('select * from notifications where user_id=$1 order by created_at desc limit 100',[uid]);return json(res,200,r.rows);}catch{}
-     const rest=await sb(`notifications?user_id=eq.${uid}&order=created_at.desc&limit=100`,'GET',null,ctx.token);
-     return json(res,200,Array.isArray(rest)?rest:[]);
-   }
+    if(req.method==='GET'&&parts[1]==='notifications'){
+      try{
+        const r=await q(`select n.*, p.display_name as actor_name, p.a2l_id as actor_a2l_id, p.avatar_url as actor_avatar, p.photo_data as actor_photo_data
+          from notifications n
+          left join profiles p on p.id=n.actor_id
+          where n.user_id=$1
+          order by n.created_at desc limit 100`,[uid]);
+        return json(res,200,r.rows);
+      }catch{}
+      const rest=await sb(`notifications?user_id=eq.${uid}&select=*,actor:profiles!actor_id(*)&order=created_at.desc&limit=100`,'GET',null,ctx.token);
+      return json(res,200,Array.isArray(rest)?rest.map(n=>({
+        ...n,
+        actor_name:n.actor?.display_name||'A2L user',
+        actor_a2l_id:n.actor?.a2l_id||'',
+        actor_avatar:n.actor?.avatar_url||'🙂',
+        actor_photo_data:n.actor?.photo_data||''
+      })):[]);
+    }
+    if(req.method==='POST'&&parts[1]==='notifications'&&parts[2]==='read'){
+      try{await q('update notifications set read_at=now() where user_id=$1 and read_at is null',[uid]);}catch{}
+      try{await sb(`notifications?user_id=eq.${uid}&read_at=is.null`,'PATCH',{read_at:new Date().toISOString()},ctx.token);}catch{}
+      return json(res,200,{ok:true});
+    }
    if(req.method==='GET'&&parts[1]==='requests'){
      let fRows=[], cRows=[], rRows=[];
      try{
@@ -465,6 +488,35 @@ async function api(req,res,body){
        send(tc.ws,{type:'messages-read',conversationId:cid,by:id,readAt:new Date().toISOString()});
      }
      return json(res,200,{ok:true});
+   }
+   if(req.method==='POST'&&parts[1]==='conversation'&&parts[2]==='clear'){
+     const targetA2L=cleanId(body.to||url.searchParams.get('to'));
+     const t=await profileByA2L(targetA2L,ctx.token),to=t.rows[0]?.id;
+     if(!to)return json(res,400,{error:'Invalid user'});
+     let cid=null;
+     try{
+       const cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);
+       cid=cr.rows[0]?.id;
+       if(cid){
+         await q('delete from messages where conversation_id=$1',[cid]);
+       }
+     }catch(e){
+       console.warn('pg clear error, fallback to rest:',e.message);
+       const convs=await sb(`conversation_members?user_id=eq.${uid}&select=conversation_id`,'GET',null,ctx.token);
+       if(Array.isArray(convs)&&convs.length){
+         const cids=convs.map(c=>c.conversation_id);
+         const peerConvs=await sb(`conversation_members?conversation_id=in.(${cids.join(',')})&user_id=eq.${to}&select=conversation_id`,'GET',null,ctx.token);
+         if(Array.isArray(peerConvs)&&peerConvs.length){
+           cid=peerConvs[0].conversation_id;
+           await sb(`messages?conversation_id=eq.${cid}`,'DELETE',null,ctx.token);
+         }
+       }
+     }
+     const tc=clients.get(targetA2L);
+     if(tc&&tc.ws.readyState===1){
+       send(tc.ws,{type:'messages-cleared',conversationId:cid,by:id});
+     }
+     return json(res,200,{ok:true,cleared:true,conversationId:cid});
    }
    if(req.method==='GET'&&parts[1]==='messages'&&parts[2]){
      try{const r=await q(`select m.* from messages m join conversation_members cm on cm.conversation_id=m.conversation_id where m.conversation_id=$1 and cm.user_id=$2 order by m.created_at asc limit 500`,[parts[2],uid]);return json(res,200,r.rows);}catch{}

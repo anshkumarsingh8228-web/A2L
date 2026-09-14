@@ -425,6 +425,124 @@ $("chatCallClose")?.addEventListener("click",()=>closeModal("chatCallModal"));
 $("hubRooms")?.addEventListener("click",()=>{go("rooms");renderA2LRooms()});
 $("newFriendChatClose")?.addEventListener("click",()=>closeModal("newFriendChatModal"));
 $("newFriendChatModal")?.addEventListener("click",e=>{if(e.target.id==="newFriendChatModal")closeModal("newFriendChatModal")});
+$("menuNotificationsBtn")?.addEventListener("click", openNotificationsCenter);
+$("notificationsModalClose")?.addEventListener("click", ()=>closeModal("notificationsModal"));
+$("notificationsModal")?.addEventListener("click", e=>{if(e.target.id==="notificationsModal")closeModal("notificationsModal")});
+$("notificationsModalPermBtn")?.addEventListener("click", async()=>{
+  if(!("Notification" in window)){toast("Notifications not supported");return;}
+  try{
+    const p=await Notification.requestPermission();
+    updateNotificationsModalPermUI();
+    toast(p==="granted"?"Notifications enabled ✓":"Notification permission: "+p);
+  }catch(e){toast("Could not enable notifications");}
+});
+
+function openNotificationsCenter(){
+  $("moreMenu")?.classList.remove("open");
+  openModal("notificationsModal");
+  updateNotificationsModalPermUI();
+  loadNotificationsModalList();
+}
+
+function updateNotificationsModalPermUI(){
+  const statusEl=$("notificationsModalPermStatus");
+  const btnEl=$("notificationsModalPermBtn");
+  if(!statusEl||!btnEl)return;
+  if(!("Notification" in window)){
+    statusEl.textContent="Not supported on this browser";
+    btnEl.style.display="none";
+    return;
+  }
+  const perm=Notification.permission;
+  if(perm==="granted"){
+    statusEl.textContent="Enabled ✓ (calls & alerts)";
+    btnEl.textContent="Enabled ✓";
+    btnEl.disabled=true;
+  }else if(perm==="denied"){
+    statusEl.textContent="Blocked in browser settings";
+    btnEl.textContent="Blocked";
+    btnEl.disabled=true;
+  }else{
+    statusEl.textContent="Receive call and message alerts";
+    btnEl.textContent="Enable";
+    btnEl.disabled=false;
+  }
+}
+
+async function loadNotificationsModalList(){
+  const listEl=$("notificationsList");
+  if(!listEl)return;
+  try{
+    const rows=await (window.a2lBackend?.notifications?.()||Promise.resolve([]));
+    if(!rows||!rows.length){
+      listEl.innerHTML='<div class="card empty" style="text-align:center;padding:28px 12px;color:var(--muted);">No notifications yet 🔔<br><small>Friend requests, messages, and calls will appear here.</small></div>';
+      return;
+    }
+    listEl.innerHTML=rows.map(n=>{
+      const type=n.type||'general';
+      const actorName=n.actor_name||n.actor_a2l_id||n.actorId||'Someone';
+      const actorAvatar=n.actor_photo_data?`<img src="${n.actor_photo_data}" class="chat-photo-thumb">`:(n.actor_avatar||'🙂');
+      let icon='🔔',title='',detail='';
+      if(type==='friend_request'){
+        icon='🤝';
+        title=`<b>${escapeHTML(actorName)}</b> sent you a friend request`;
+        detail='Tap to view in Requests';
+      }else if(type==='friend_accepted'){
+        icon='🎉';
+        title=`<b>${escapeHTML(actorName)}</b> accepted your friend request`;
+        detail='You are now friends! Tap to chat';
+      }else if(type==='message'){
+        icon='💬';
+        const snippet=n.payload?.text||n.payload?.message?.body||'New message';
+        title=`<b>${escapeHTML(actorName)}</b>: ${escapeHTML(snippet.slice(0,40))}`;
+        detail='Tap to open conversation';
+      }else if(type==='chat_request'){
+        icon='📩';
+        title=`<b>${escapeHTML(actorName)}</b> wants to chat`;
+        detail='Tap to view in Requests';
+      }else if(type==='reconnect_request'){
+        icon='🔄';
+        title=`<b>${escapeHTML(actorName)}</b> wants to reconnect`;
+        detail='Tap to view in Requests';
+      }else{
+        title=`Notification from <b>${escapeHTML(actorName)}</b>`;
+        detail=type;
+      }
+      const timeStr=n.created_at?new Date(n.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+      return `<div class="person" style="cursor:pointer;padding:10px 12px;min-height:unset;" data-notif-type="${escapeHTML(type)}" data-notif-actor="${escapeHTML(n.actor_a2l_id||'')}">
+        <div class="avatar" style="width:40px;height:40px;font-size:20px;">${actorAvatar}</div>
+        <div class="personmain">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:13px;line-height:1.3;">${icon} ${title}</div>
+            ${timeStr?`<small class="muted" style="margin-left:6px;white-space:nowrap;">${timeStr}</small>`:''}
+          </div>
+          <small class="muted" style="font-size:11px;">${detail}</small>
+        </div>
+      </div>`;
+    }).join("");
+
+    qsa("[data-notif-type]").forEach(card=>{
+      card.onclick=()=>{
+        closeModal("notificationsModal");
+        const t=card.dataset.notifType;
+        const actor=card.dataset.notifActor;
+        if(t==='friend_request'||t==='chat_request'||t==='reconnect_request'){
+          go('chats');
+          if(typeof setChatCategory==='function')setChatCategory('requests');
+        }else if(t==='message'||t==='friend_accepted'){
+          if(actor&&typeof openChat==='function'){
+            openChat(actor);
+          }else{
+            go('chats');
+          }
+        }
+      };
+    });
+    window.a2lBackend?.markNotificationsRead?.().catch(()=>{});
+  }catch(e){
+    listEl.innerHTML='<div class="card empty" style="text-align:center;padding:24px 12px;color:var(--muted);">Could not load notifications.</div>';
+  }
+}
 $("activityClose")?.addEventListener("click",()=>closeModal("activityModal"));$("chatActionsClose")?.addEventListener("click",()=>closeModal("chatActionsModal"));$("connectionRequestClose")?.addEventListener("click",()=>closeModal("connectionRequestModal"));$("declineConnection")?.addEventListener("click",()=>respondConnection(false));$("acceptConnection")?.addEventListener("click",()=>respondConnection(true));
 qsa("[data-play-game]").forEach(b=>b.addEventListener("click",()=>{playGame=b.dataset.playGame;qsa("[data-play-game]").forEach(x=>x.classList.toggle("selected",x===b))}));
 $("playRequestClose")?.addEventListener("click",()=>closeModal("playRequestModal"));$("playRequestCancel")?.addEventListener("click",()=>closeModal("playRequestModal"));$("sendPlayRequest")?.addEventListener("click",createPlayRequest);$("incomingClose")?.addEventListener("click",()=>closeModal("incomingRequestModal"));$("declineIncoming")?.addEventListener("click",()=>respondPlayRequest(false));$("acceptIncoming")?.addEventListener("click",()=>respondPlayRequest(true));$("switchModeClose")?.addEventListener("click",()=>closeModal("switchModeModal"));qsa("[data-switch-mode]").forEach(b=>b.addEventListener("click",()=>switchMode(b.dataset.switchMode)));$("challengeClose")?.addEventListener("click",()=>closeModal("challengeModal"));

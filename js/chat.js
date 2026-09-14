@@ -87,10 +87,9 @@ function setupChatSelection(){
       clearTimeout(chatLongPressTimer);
       chatLongPressTimer=setTimeout(()=>{
         chatLongPressTriggered=true;
-        if(!chatSelectionMode) enterChatSelection(id);
-        else toggleChatSelection(id);
         if(navigator.vibrate) navigator.vibrate(35);
-      },550);
+        openDeleteChatPrompt(id);
+      },500);
     };
     const cancelPress=()=>{
       clearTimeout(chatLongPressTimer);
@@ -101,19 +100,70 @@ function setupChatSelection(){
     row.addEventListener("pointerup",cancelPress);
     row.addEventListener("pointercancel",cancelPress);
     row.addEventListener("pointerleave",cancelPress);
-    row.addEventListener("contextmenu",e=>e.preventDefault());
+    row.addEventListener("contextmenu",e=>{
+      e.preventDefault();
+      openDeleteChatPrompt(id);
+    });
   });
 }
 
+let pendingDeleteChatId=null;
+
+function openDeleteChatPrompt(id){
+  const f=friends.find(x=>Number(x.id)===Number(id)||x.a2lId===id);
+  const name=f?.name||f?.displayName||"this conversation";
+  pendingDeleteChatId=id;
+  const nameEl=$("deleteChatTargetName");
+  if(nameEl) nameEl.textContent=`Delete chat with ${name}?`;
+  openModal("deleteChatModal");
+}
+
+function confirmDeleteChat(){
+  if(pendingDeleteChatId===null) return;
+  const id=pendingDeleteChatId;
+  const f=friends.find(x=>Number(x.id)===Number(id)||x.a2lId===id);
+  state.deletedChats=state.deletedChats||[];
+  
+  const idStr=String(id);
+  if(!state.deletedChats.includes(idStr)) state.deletedChats.push(idStr);
+  if(f?.id&&!state.deletedChats.includes(String(f.id))) state.deletedChats.push(String(f.id));
+  if(f?.a2lId&&!state.deletedChats.includes(String(f.a2lId))) state.deletedChats.push(String(f.a2lId));
+
+  delete state.chats[id];
+  if(f?.id) delete state.chats[f.id];
+  if(activeChatId===id||(f?.id&&activeChatId===f.id)) activeChatId=null;
+
+  if(f){
+    f.lastMessage=null;
+    f.lastMessageAt=null;
+    f.unreadCount=0;
+  }
+
+  save();
+  closeModal("deleteChatModal");
+  pendingDeleteChatId=null;
+  renderChats();
+  renderHistory();
+  toast("Chat deleted 🗑️");
+}
+
 function deleteSelectedChats(){
-  const ids=Array.from(selectedChatIds).filter(id=>state.chats[id]);
+  const ids=Array.from(selectedChatIds);
   if(!ids.length){toast("Select at least one chat");return;}
   const label=ids.length===1?"this chat":`${ids.length} chats`;
   if(!confirm(`Delete ${label}?`)) return;
+  state.deletedChats=state.deletedChats||[];
   ids.forEach(id=>{
+    const f=friends.find(x=>Number(x.id)===Number(id)||x.a2lId===id);
+    state.deletedChats.push(String(id));
+    if(f?.id) state.deletedChats.push(String(f.id));
+    if(f?.a2lId) state.deletedChats.push(String(f.a2lId));
     delete state.chats[id];
-    if(activeChatId===id) activeChatId=null;
+    if(f?.id) delete state.chats[f.id];
+    if(activeChatId===id||(f?.id&&activeChatId===f.id)) activeChatId=null;
+    if(f){f.lastMessage=null;f.lastMessageAt=null;f.unreadCount=0;}
   });
+  state.deletedChats=[...new Set(state.deletedChats)];
   save();
   clearChatSelection();
   renderChats();
@@ -124,6 +174,9 @@ function deleteSelectedChats(){
 function initChatSelectionControls(){
   $("chatSelectionCancel")?.addEventListener("click",clearChatSelection);
   $("chatSelectionDelete")?.addEventListener("click",deleteSelectedChats);
+  $("confirmDeleteChatBtn")?.addEventListener("click",confirmDeleteChat);
+  $("cancelDeleteChatBtn")?.addEventListener("click",()=>{closeModal("deleteChatModal");pendingDeleteChatId=null;});
+  $("deleteChatModal")?.addEventListener("click",e=>{if(e.target.id==="deleteChatModal"){closeModal("deleteChatModal");pendingDeleteChatId=null;}});
 }
 function initChatCategoryControls(){
   qsa("[data-chat-category]").forEach(b=>{
@@ -230,7 +283,8 @@ function renderChats(){
 
   if(chatCategory==="friends"){
     $("newFriendChat")?.classList.remove("hidden");
-    const friendList=friends.filter(f=>f&&(f.isRealFriend||(state.connections||[]).map(Number).includes(Number(f.id))));
+    const deletedSet=new Set((state.deletedChats||[]).map(String));
+    const friendList=friends.filter(f=>f&&(f.isRealFriend||(state.connections||[]).map(Number).includes(Number(f.id)))&&!deletedSet.has(String(f.id))&&!(f.a2lId&&deletedSet.has(String(f.a2lId))));
     if(!friendList.length){
       $("chatList").innerHTML='<div class="card empty chat-empty-state">No friends yet. Tap ＋ to search and add friends, or meet someone in Quick Match! 🤝</div>';
     }else{
@@ -308,7 +362,8 @@ function renderChats(){
 
   // Strangers tab
   $("newFriendChat")?.classList.add("hidden");
-  const strangerIds=Object.keys(state.chats).map(Number).filter(id=>state.chats[id]&&chatCategoryOf(id)==="strangers");
+  const strangerDeletedSet=new Set((state.deletedChats||[]).map(String));
+  const strangerIds=Object.keys(state.chats).map(Number).filter(id=>state.chats[id]&&!strangerDeletedSet.has(String(id))&&chatCategoryOf(id)==="strangers");
   $("chatList").innerHTML=strangerIds.length?strangerIds.map(id=>{
     const f=friends.find(x=>x.id===id); const c=state.chats[id]||{}; const msgs=c.messages||[]; const last=msgs[msgs.length-1];
     const access=chatAccess(c);
@@ -538,6 +593,11 @@ function openChat(id){
   }
   if(!f)return;
   const idNum=f.id;
+  // If chat was previously removed from chat list, restore it now that user opened it
+  if(state.deletedChats&&state.deletedChats.length){
+    const sId=String(id), sNum=Number(id);
+    state.deletedChats=state.deletedChats.filter(x=>x!==sId&&x!==sNum&&x!==f.a2lId&&x!==String(f.id)&&x!==f.id);
+  }
   activeChatProfile=false;
   activeChatId=idNum;
   state.chats[idNum]=state.chats[idNum]||{messages:[],source:"friend",ended:false,locked:false,startedAt:Date.now()};
@@ -707,7 +767,27 @@ function openChat(id){
   $("chatVoiceCall")?.addEventListener("click",()=>window.a2lCall?.startMatch("voice",f.a2lId,"call"));
 
   $("chatWallpaperBtn").onclick=()=>{chatMenu.classList.remove("open");openWallpaperPicker(idNum)};
-  $("chatClearMessages").onclick=()=>{chatMenu.classList.remove("open");if(confirm("Clear all messages in this chat?")){state.chats[idNum].messages=[];save();renderMessages(idNum);toast("Messages cleared 🧹")}};
+  $("chatClearMessages").onclick=async()=>{
+    chatMenu.classList.remove("open");
+    if(!confirm("Clear all messages in this chat? This cannot be undone."))return;
+    try{
+      if(window.a2lBackend?.clearConversation&&f?.a2lId){
+        await window.a2lBackend.clearConversation(f.a2lId);
+      }
+      if(state.chats[idNum])state.chats[idNum].messages=[];
+      if(f){f.lastMessage=null;f.lastMessageAt=null;f.unreadCount=0;}
+      save();
+      renderMessages(idNum);
+      renderChats();
+      toast("Messages cleared 🧹");
+    }catch(e){
+      console.warn("clear messages error:",e);
+      if(state.chats[idNum])state.chats[idNum].messages=[];
+      save();
+      renderMessages(idNum);
+      toast("Messages cleared locally");
+    }
+  };
   $("chatEndFromMenu").onclick=()=>{chatMenu.classList.remove("open");requestEndChat()};
   $("chatWallpaperClose").onclick=()=>closeWallpaperPicker(idNum,false);
   $("chatWallpaperCancel").onclick=()=>closeWallpaperPicker(idNum,false);
