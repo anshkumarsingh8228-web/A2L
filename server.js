@@ -1,7 +1,24 @@
-const http=require('http');const fs=require('fs');const path=require('path');const crypto=require('crypto');const {WebSocketServer}=require('ws');const {Pool}=require('pg');
+const http=require('http');const fs=require('fs');const path=require('path');const crypto=require('crypto');const dns=require('dns');const {WebSocketServer}=require('ws');const {Pool}=require('pg');
+if(dns.setDefaultResultOrder)dns.setDefaultResultOrder('ipv4first');
 const PORT=Number(process.env.PORT||10000),ROOT=__dirname;
 const DATABASE_URL=process.env.DATABASE_URL||'';const SUPABASE_URL=(process.env.SUPABASE_URL||'').replace(/\/$/,'');const SUPABASE_ANON_KEY=process.env.SUPABASE_ANON_KEY||'';const TURN_URL=process.env.TURN_URL||'';const TURN_USERNAME=process.env.TURN_USERNAME||'';const TURN_CREDENTIAL=process.env.TURN_CREDENTIAL||'';const REQUIRE_AUTH=process.env.REQUIRE_AUTH!=='false';
-const pool=DATABASE_URL?new Pool({connectionString:DATABASE_URL,ssl:DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false},max:Number(process.env.DB_POOL_MAX||10)}):null;
+function resolveDatabaseUrl(rawUrl){
+  if(!rawUrl)return '';
+  try{
+    const u=new URL(rawUrl);
+    const m=u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    if(m){
+      const ref=m[1], region=process.env.SUPABASE_REGION||'ap-northeast-1', poolPort=process.env.SUPABASE_POOLER_PORT||'5432';
+      u.hostname=`aws-0-${region}.pooler.supabase.com`;
+      if(!u.username.includes('.')) u.username=`${u.username}.${ref}`;
+      u.port=poolPort;
+      return u.toString();
+    }
+  }catch(e){console.warn('resolveDatabaseUrl error:',e.message);}
+  return rawUrl;
+}
+const RESOLVED_DATABASE_URL=resolveDatabaseUrl(DATABASE_URL);
+const pool=RESOLVED_DATABASE_URL?new Pool({connectionString:RESOLVED_DATABASE_URL,ssl:RESOLVED_DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false},max:Number(process.env.DB_POOL_MAX||10)}):null;
 const clients=new Map(),queue=[];
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.webp':'image/webp'};
 const send=(ws,m)=>{if(ws?.readyState===1)ws.send(JSON.stringify(m))};
