@@ -2,48 +2,70 @@ const http=require('http');const fs=require('fs');const path=require('path');con
 if(dns.setDefaultResultOrder)dns.setDefaultResultOrder('ipv4first');
 const PORT=Number(process.env.PORT||10000),ROOT=__dirname;
 const DATABASE_URL=process.env.DATABASE_URL||'';const SUPABASE_URL=(process.env.SUPABASE_URL||'').replace(/\/$/,'');const SUPABASE_ANON_KEY=process.env.SUPABASE_ANON_KEY||'';const TURN_URL=process.env.TURN_URL||'';const TURN_USERNAME=process.env.TURN_USERNAME||'';const TURN_CREDENTIAL=process.env.TURN_CREDENTIAL||'';const REQUIRE_AUTH=process.env.REQUIRE_AUTH!=='false';
-function resolveDatabaseUrl(rawUrl){
-  if(!rawUrl)return '';
+let dbDiag={hasPass:false,passLen:0,hasBrackets:false,user:null,host:null};
+function parseDatabaseConfig(rawUrl){
+  if(!rawUrl)return null;
   try{
     const refMatch=(SUPABASE_URL||'').match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i);
     const defaultRef=refMatch?refMatch[1]:'kxvlhajuxbnwkejchhrt';
-    const region=process.env.SUPABASE_REGION||'ap-northeast-1';
-    const poolPort=process.env.SUPABASE_POOLER_PORT||'5432';
+    const defaultRegion=process.env.SUPABASE_REGION||'ap-northeast-1';
+    const poolPort=Number(process.env.SUPABASE_POOLER_PORT||5432);
 
-    // Direct Supabase hostname
-    const directMatch=rawUrl.match(/@db\.([a-z0-9]+)\.supabase\.co(:[0-9]+)?(\/.*)?$/i);
+    let cleanedUrl=rawUrl.trim();
+    const sIdx=cleanedUrl.indexOf('://');
+    const atIdx=cleanedUrl.lastIndexOf('@');
+    if(sIdx===-1||atIdx===-1)return {connectionString:cleanedUrl,ssl:{rejectUnauthorized:false}};
+
+    const creds=cleanedUrl.slice(sIdx+3,atIdx);
+    const hostPath=cleanedUrl.slice(atIdx+1);
+    const cIdx=creds.indexOf(':');
+    let user=cIdx!==-1?creds.slice(0,cIdx).trim():creds.trim();
+    let password=cIdx!==-1?creds.slice(cIdx+1).trim():'';
+    
+    let hasBrackets=false;
+    if(password.startsWith('[')&&password.endsWith(']')){
+      password=password.slice(1,-1);
+      hasBrackets=true;
+    }
+    if((password.startsWith('"')&&password.endsWith('"'))||(password.startsWith("'")&&password.endsWith("'"))){
+      password=password.slice(1,-1);
+    }
+
+    if(!user.includes('.'))user=user+'.'+defaultRef;
+
+    let slashIdx=hostPath.indexOf('/');
+    let hostPort=slashIdx!==-1?hostPath.slice(0,slashIdx):hostPath;
+    let database=slashIdx!==-1?hostPath.slice(slashIdx+1).split('?')[0]:'postgres';
+    if(!database)database='postgres';
+
+    let colonIdx=hostPort.indexOf(':');
+    let host=colonIdx!==-1?hostPort.slice(0,colonIdx).trim():hostPort.trim();
+    let port=colonIdx!==-1?Number(hostPort.slice(colonIdx+1))||poolPort:poolPort;
+
+    const directMatch=host.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
     if(directMatch){
-      const ref=directMatch[1], rest=directMatch[3]||'/postgres';
-      let prefix=rawUrl.slice(0,directMatch.index);
-      const sIdx=prefix.indexOf('://');
-      if(sIdx!==-1){
-        const creds=prefix.slice(sIdx+3), cIdx=creds.indexOf(':'), user=cIdx!==-1?creds.slice(0,cIdx):creds;
-        if(!user.includes('.')){
-          prefix=prefix.slice(0,sIdx+3)+user+'.'+ref+(cIdx!==-1?creds.slice(cIdx):'');
-        }
-      }
-      return `${prefix}@aws-0-${region}.pooler.supabase.com:${poolPort}${rest}`;
+      host=`aws-0-${defaultRegion}.pooler.supabase.com`;
+      port=poolPort;
     }
 
-    // Pooler Supabase hostname
-    const poolerMatch=rawUrl.match(/@([^@:]*pooler\.supabase\.com)(:[0-9]+)?(\/.*)?$/i);
-    if(poolerMatch){
-      let prefix=rawUrl.slice(0,poolerMatch.index);
-      const sIdx=prefix.indexOf('://');
-      if(sIdx!==-1){
-        const creds=prefix.slice(sIdx+3), cIdx=creds.indexOf(':'), user=cIdx!==-1?creds.slice(0,cIdx):creds;
-        if(!user.includes('.')){
-          prefix=prefix.slice(0,sIdx+3)+user+'.'+defaultRef+(cIdx!==-1?creds.slice(cIdx):'');
-        }
-      }
-      const host=poolerMatch[1], rest=poolerMatch[3]||'/postgres';
-      return `${prefix}@${host}:${poolPort}${rest}`;
-    }
-  }catch(e){console.warn('resolveDatabaseUrl error:',e.message);}
-  return rawUrl;
+    dbDiag={hasPass:password.length>0,passLen:password.length,hasBrackets,user,host};
+
+    return {
+      user,
+      password,
+      host,
+      port,
+      database,
+      ssl:{rejectUnauthorized:false},
+      max:Number(process.env.DB_POOL_MAX||10)
+    };
+  }catch(e){
+    console.warn('parseDatabaseConfig error:',e.message);
+    return {connectionString:rawUrl,ssl:{rejectUnauthorized:false}};
+  }
 }
-const RESOLVED_DATABASE_URL=resolveDatabaseUrl(DATABASE_URL);
-const pool=RESOLVED_DATABASE_URL?new Pool({connectionString:RESOLVED_DATABASE_URL,ssl:RESOLVED_DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false},max:Number(process.env.DB_POOL_MAX||10)}):null;
+const DB_CONFIG=parseDatabaseConfig(DATABASE_URL);
+const pool=DB_CONFIG?new Pool(DB_CONFIG):null;
 const clients=new Map(),queue=[];
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.webp':'image/webp'};
 const send=(ws,m)=>{if(ws?.readyState===1)ws.send(JSON.stringify(m))};
@@ -137,7 +159,7 @@ function peer(c){return c?.peerId?clients.get(c.peerId):null}function relay(c,m)
 async function endPair(c,notifyPeer=true,outcome='ended'){removeQueue(c?.id);const p=peer(c);if(c?.historyId){q(`update connection_history set ended_at=now(),outcome=$1,last_seen_at=now() where id=$2`,[outcome,c.historyId]).catch(()=>{})}c.busy=false;c.peerId=null;c.historyId=null;if(p){p.busy=false;p.peerId=null;p.historyId=null;if(notifyPeer)send(p.ws,{type:'hangup',reason:'peer-ended'})}}
 async function api(req,res,body){
  const url=new URL(req.url,`http://${req.headers.host}`),parts=url.pathname.split('/').filter(Boolean);
-   if(req.method==='GET'&&url.pathname==='/api/health'){let dbOk=false,dbErr=null;try{if(pool){await pool.query('select 1');dbOk=true;}}catch(e){dbErr=e.message;}return json(res,200,{ok:true,database:dbOk,dbError:dbErr||undefined,auth:REQUIRE_AUTH&&!!SUPABASE_URL});}
+   if(req.method==='GET'&&url.pathname==='/api/health'){let dbOk=false,dbErr=null;try{if(pool){await pool.query('select 1');dbOk=true;}}catch(e){dbErr=e.message;}return json(res,200,{ok:true,database:dbOk,dbError:dbErr||undefined,dbDiag,auth:REQUIRE_AUTH&&!!SUPABASE_URL});}
  if(req.method==='GET'&&url.pathname==='/api/config')return json(res,200,{supabaseUrl:SUPABASE_URL,supabaseAnonKey:SUPABASE_ANON_KEY,authRequired:REQUIRE_AUTH});
  if(req.method==='GET'&&url.pathname==='/api/rtc-config'){try{await authenticateHttp(req);return json(res,200,{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'},...(TURN_URL?[{urls:TURN_URL,username:TURN_USERNAME,credential:TURN_CREDENTIAL}]:[])]});}catch(e){return json(res,e.status||401,{error:e.message})}}
   if(!pool&&!SUPABASE_URL)return json(res,503,{error:'Database service not configured'});if(parts[0]!=='api')return false;

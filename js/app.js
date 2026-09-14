@@ -5,16 +5,7 @@
 
 const $=id=>document.getElementById(id);
 const qsa=sel=>Array.from(document.querySelectorAll(sel));
-const friends=[
-{id:1,name:"Aarav",a2lId:"aarav_482",avatar:"🎧",ageGroup:"16-17",languages:["english","hindi"],online:true,interests:["Music","Gaming"],bio:"Always up for a good playlist and a game."},
-{id:2,name:"Mira",a2lId:"mira_731",avatar:"🎨",ageGroup:"13-15",languages:["english"],online:true,interests:["Art","Movies"],bio:"Drawing, movies and random conversations."},
-{id:3,name:"Kabir",a2lId:"kabir_219",avatar:"💻",ageGroup:"16-17",languages:["english","hindi"],online:false,interests:["Coding","Gaming"],bio:"Learning web development and building things."},
-{id:4,name:"Zoya",a2lId:"zoya_604",avatar:"📚",ageGroup:"13-15",languages:["hindi","english"],online:true,interests:["Reading","Music"],bio:"Books, music and chill chats."},
-{id:5,name:"Rohan",a2lId:"rohan_853",avatar:"⚽",ageGroup:"16-17",languages:["hindi","english"],online:false,interests:["Sports","Movies"],bio:"Sports fan who loves movie nights."},
-{id:6,name:"Anaya",a2lId:"anaya_417",avatar:"✈️",ageGroup:"13-15",languages:["english"],online:true,interests:["Travel","Art"],bio:"Collecting places, stories and sketches."},
-{id:7,name:"Vihaan",a2lId:"vihaan_926",avatar:"🎮",ageGroup:"16-17",languages:["english","hindi"],online:true,interests:["Gaming","Coding"],bio:"Game nights + coding experiments."},
-{id:8,name:"Ishita",a2lId:"ishita_305",avatar:"🎬",ageGroup:"13-15",languages:["hindi","english"],online:false,interests:["Movies","Reading"],bio:"Movie discussions are my favourite."}
-];
+const friends=[];
 
 const banned=[/\bf+u+c+k+\b/i,/\bf+[u*]+c+k+\b/i,/\bmotherf+u+c+k+\b/i,/\bmad(?:a|h)?r?c?h+o+d+\b/i,/\bbehen\s*chod\b/i,/\bch[o0]d+\b/i];
 const phone10=/\b(?:\d[\s-]?){10}\b/g;
@@ -39,23 +30,10 @@ function makeA2LId(){
 state.profile=Object.assign({displayName:"You",a2lId:makeA2LId(),avatar:"💻",ageGroup:"16-17",bio:"Friendship-first • Here to meet interesting people.",status:"Available to chat",visibility:"private",interests:["Gaming","Music","Coding"],lookingFor:["Friendship","Chatting"]},state.profile||{});
 if(!state.profile.a2lId)state.profile.a2lId=makeA2LId();
 if(typeof state.likes.__me!=="number")state.likes.__me=0;
-[[1,1284],[2,962],[3,741],[4,1138],[5,528],[6,889],[7,1462],[8,673]].forEach(([id,n])=>{if(typeof state.likes[id]!=="number")state.likes[id]=n;});
-
 Object.keys(state.chats).forEach(id=>{
   const c=state.chats[id];
-  if(Array.isArray(c)) state.chats[id]={messages:c,source:"suggested",ended:false};
+  if(Array.isArray(c)) state.chats[id]={messages:c,source:"friend",ended:false,locked:false};
   else if(c && !Array.isArray(c.messages)) c.messages=[];
-  if(c && !c.source) c.source="suggested";
-  if(c && typeof c.ended!=="boolean") c.ended=false;
-});
-// Legacy safety: old Ishita chat must never remain an unlocked suggested chat for a free user.
-if(state.chats[8] && !state.premium){state.chats[8].source="suggested";state.chats[8].ended=true;}
-Object.keys(state.chats).forEach(id=>{
-  const c=state.chats[id];
-  if(c){
-    if(c.source!=="quick") c.locked=true;
-    else c.locked=!!c.ended;
-  }
 });
 save();
 
@@ -215,51 +193,130 @@ function go(page){
   update();
 })();
 
-function suggestedFriends(){
-  const search=$("suggestedSearch").value.trim().toLowerCase();
-  return friends.filter(f=>{
-    if(state.blocked.includes(f.id))return false;
-    if(search && !f.name.toLowerCase().includes(search) && !String(f.a2lId||"").toLowerCase().includes(search.replace(/^@/,"")))return false;
-    return true;
+let liveSearchedUsers=[];
+let homeSearchDebounce=null;
+
+function personHTML(f){
+  const isFriend = f.isRealFriend || (state.connections||[]).map(String).includes(String(f.id)) || f.status==='friend';
+  const isPending = f.status==='pending_outgoing' || state.outgoingConnectionRequests?.[f.a2lId]?.status==='pending';
+  const status = f.online ? "Online" : "Offline";
+  const avatarContent = f.photoData ? `<img src="${f.photoData}" class="chat-photo-thumb">` : (f.avatar||"🙂");
+  return `<div class="person" data-person-a2l="${escapeHTML(f.a2lId)}">
+    <div class="person-avatar-wrap">
+      <div class="avatar person-avatar">${avatarContent}</div>
+      <span class="person-online-dot ${f.online?"is-online":""}" aria-hidden="true"></span>
+    </div>
+    <div class="personmain">
+      <div class="person-title-row"><b>${escapeHTML(f.name||f.displayName||f.a2lId)}</b></div>
+      <div class="person-id-status">
+        <span class="a2l-person-id">@${escapeHTML(f.a2lId||"a2l_user")}</span>
+        <span class="status ${f.online?"online":"offline"}">${status}</span>
+      </div>
+      <div class="person-social-meta">${(f.interests||[]).slice(0,3).map(x=>`<span>${escapeHTML(x)}</span>`).join("")}</div>
+    </div>
+    <div class="person-actions">
+      ${isFriend 
+        ? `<button class="primary" data-home-chat="${escapeHTML(f.a2lId)}">Chat 💬</button>` 
+        : isPending 
+          ? `<button class="secondary" disabled>⏳ Pending</button>` 
+          : `<button class="primary" data-home-add="${escapeHTML(f.a2lId)}">Add 🤝</button>`}
+    </div>
+  </div>`;
+}
+
+function bindPeopleActions(){
+  qsa("[data-home-chat]").forEach(b=>{
+    b.onclick=e=>{
+      e.stopPropagation();
+      const a2l=b.dataset.homeChat;
+      let f=friends.find(x=>x.a2lId===a2l);
+      if(!f){
+        const s=liveSearchedUsers.find(x=>x.a2lId===a2l);
+        if(s){
+          f={
+            id:Math.floor(Math.random()*900000000)+100000000,
+            name:s.displayName||s.a2lId,
+            a2lId:s.a2lId,
+            avatar:s.avatar||'🙂',
+            photoData:s.photoData||'',
+            online:!!s.online,
+            isRealFriend:true
+          };
+          friends.push(f);
+        }
+      }
+      openChat(a2l);
+    };
+  });
+
+  qsa("[data-home-add]").forEach(b=>{
+    b.onclick=async e=>{
+      e.stopPropagation();
+      const a2l=b.dataset.homeAdd;
+      b.disabled=true;
+      b.textContent='Adding…';
+      try{
+        await window.a2lBackend?.friendRequest(a2l);
+        b.className='secondary';
+        b.textContent='⏳ Pending';
+        state.outgoingConnectionRequests=state.outgoingConnectionRequests||{};
+        state.outgoingConnectionRequests[a2l]={status:'pending'};
+        save();
+        toast('Friend request sent 🤝');
+      }catch(err){
+        b.disabled=false;
+        b.textContent='Add 🤝';
+        toast(err.message||'Could not send request');
+      }
+    };
   });
 }
 
-function personHTML(f){
-  const connected=(state.connections||[]).map(Number).includes(Number(f.id));
-  const pending=state.outgoingConnectionRequests?.[f.a2lId]?.status==="pending";
-  const likes=Number(state.likes?.[f.id]||0).toLocaleString();
-  const visibleInterests=(f.interests||[]).slice(0,3);
-  const status=f.online?"Online":"Offline";
-  return `<div class="person" data-profile="${f.id}" role="button" tabindex="0">
-    <div class="person-avatar-wrap"><div class="avatar person-avatar">${f.avatar}</div><span class="person-online-dot ${f.online?"is-online":""}" aria-hidden="true"></span></div>
-    <div class="personmain">
-      <div class="person-title-row"><b>${escapeHTML(f.name)}</b></div>
-      <div class="person-id-status"><span class="a2l-person-id">@${escapeHTML(f.a2lId||"a2l_user")}</span><span class="status ${f.online?"online":"offline"}">${status}</span></div>
-      <div class="person-social-meta"><span>❤️ ${likes} likes</span>${visibleInterests.map(x=>`<span>${escapeHTML(x)}</span>`).join("")}</div>
-    </div>
-    <div class="person-actions"><button class="chat-unified" data-chat="${f.id}">${state.premium?"Chat":"🔒 Chat"}</button></div>
-  </div>`;
-}
 function renderPeople(){
-  const list=suggestedFriends();
-  $("people").innerHTML=list.length?list.map(personHTML).join(""):`<div class="card empty">No people found. Try another name.</div>`;
-  $("resultCount").textContent=list.length+" found";
-  qsa("[data-chat]").forEach(b=>b.onclick=e=>{
-    e.stopPropagation();
-    const id=Number(b.dataset.chat);
-    if(!state.premium){showPremiumGate();return;}
-    state.chats[id]=state.chats[id]||{messages:[],source:"suggested",ended:false,locked:false,startedAt:Date.now()};
-    state.chats[id].source="suggested";
-    state.chats[id].ended=false;
-    state.chats[id].locked=false;
-    save();
-    openChat(id);
-  });
-  qsa("[data-profile]").forEach(x=>{
-    const open=()=>openProfile(Number(x.dataset.profile));
-    x.onclick=()=>open();
-    x.onkeydown=e=>{if((e.key==="Enter"||e.key===" ")&&!e.target.closest("button")){e.preventDefault();open();}};
-  });
+  const searchInput=$("suggestedSearch");
+  const query=searchInput?searchInput.value.trim():"";
+
+  if(query){
+    clearTimeout(homeSearchDebounce);
+    homeSearchDebounce=setTimeout(async()=>{
+      try{
+        const results=await window.a2lBackend?.searchUsers(query);
+        liveSearchedUsers=Array.isArray(results)?results.map(r=>({
+          id:r.a2lId,
+          name:r.displayName||r.a2lId,
+          a2lId:r.a2lId,
+          avatar:r.avatar||'🙂',
+          photoData:r.photoData||'',
+          online:!!r.online,
+          interests:r.interests||[],
+          status:r.status||'none',
+          isRealFriend:r.status==='friend'
+        })):[];
+      }catch(e){
+        liveSearchedUsers=[];
+      }
+      $("people").innerHTML=liveSearchedUsers.length
+        ? liveSearchedUsers.map(personHTML).join("")
+        : `<div class="card empty" style="text-align:center;padding:24px 16px">No registered users found matching "${escapeHTML(query)}".</div>`;
+      $("resultCount").textContent=liveSearchedUsers.length+" found";
+      bindPeopleActions();
+    },250);
+    return;
+  }
+
+  const realFriends=friends.filter(f=>f&&f.isRealFriend);
+  if(realFriends.length){
+    $("people").innerHTML=realFriends.map(personHTML).join("");
+    $("resultCount").textContent=realFriends.length+" in circle";
+  }else{
+    $("people").innerHTML=`<div class="card empty" style="text-align:center;padding:28px 16px">
+      <div style="font-size:32px;margin-bottom:8px">👥</div>
+      <h3 style="margin:0 0 6px">No friends in your circle yet</h3>
+      <p class="muted" style="margin:0 0 14px">Type in the search bar above to find registered A2L users, or meet people in Quick Match! ⚡</p>
+    </div>`;
+    $("resultCount").textContent="0 in circle";
+  }
+  bindPeopleActions();
 }
 
 function renderProfileFriends(){

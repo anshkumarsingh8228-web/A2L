@@ -520,7 +520,22 @@ function openProfile(id){
 }
 
 function openChat(id){
-  const f=friends.find(x=>x.id===id||x.id===Number(id)||x.a2lId===id);
+  let f=friends.find(x=>x.id===id||x.id===Number(id)||x.a2lId===id);
+  if(!f&&typeof liveSearchedUsers!=='undefined'){
+    const s=liveSearchedUsers.find(x=>x.a2lId===id||x.id===id);
+    if(s){
+      f={
+        id:Math.floor(Math.random()*900000000)+100000000,
+        name:s.name||s.displayName||s.a2lId,
+        a2lId:s.a2lId,
+        avatar:s.avatar||'🙂',
+        photoData:s.photoData||'',
+        online:!!s.online,
+        isRealFriend:true
+      };
+      friends.push(f);
+    }
+  }
   if(!f)return;
   const idNum=f.id;
   activeChatProfile=false;
