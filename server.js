@@ -1,6 +1,6 @@
 const http=require('http');const fs=require('fs');const path=require('path');const crypto=require('crypto');const dns=require('dns');const {WebSocketServer}=require('ws');const {Pool}=require('pg');
 if(dns.setDefaultResultOrder)dns.setDefaultResultOrder('ipv4first');
-const PORT=Number(process.env.PORT||10000),ROOT=__dirname;
+const PORT=Number(process.env.PORT||10000),ROOT=__dirname,SERVER_STARTED=new Date().toISOString();
 const DATABASE_URL=process.env.DATABASE_URL||'';const SUPABASE_URL=(process.env.SUPABASE_URL||'').replace(/\/$/,'');const SUPABASE_ANON_KEY=process.env.SUPABASE_ANON_KEY||'';const TURN_URL=process.env.TURN_URL||'';const TURN_USERNAME=process.env.TURN_USERNAME||'';const TURN_CREDENTIAL=process.env.TURN_CREDENTIAL||'';const REQUIRE_AUTH=process.env.REQUIRE_AUTH!=='false';
 let dbDiag={hasPass:false,passLen:0,hasBrackets:false,user:null,host:null};
 function parseDatabaseConfig(rawUrl){
@@ -159,7 +159,7 @@ function peer(c){return c?.peerId?clients.get(c.peerId):null}function relay(c,m)
 async function endPair(c,notifyPeer=true,outcome='ended'){removeQueue(c?.id);const p=peer(c);if(c?.historyId){q(`update connection_history set ended_at=now(),outcome=$1,last_seen_at=now() where id=$2`,[outcome,c.historyId]).catch(()=>{})}c.busy=false;c.peerId=null;c.historyId=null;if(p){p.busy=false;p.peerId=null;p.historyId=null;if(notifyPeer)send(p.ws,{type:'hangup',reason:'peer-ended'})}}
 async function api(req,res,body){
  const url=new URL(req.url,`http://${req.headers.host}`),parts=url.pathname.split('/').filter(Boolean);
-   if(req.method==='GET'&&url.pathname==='/api/health'){let dbOk=false,dbErr=null;try{if(pool){await pool.query('select 1');dbOk=true;}}catch(e){dbErr=e.message;}return json(res,200,{ok:true,database:dbOk,dbError:dbErr||undefined,dbDiag,auth:REQUIRE_AUTH&&!!SUPABASE_URL});}
+    if(req.method==='GET'&&url.pathname==='/api/health'){let dbOk=false,dbErr=null;try{if(pool){await pool.query('select 1');dbOk=true;}}catch(e){dbErr=e.message;}return json(res,200,{ok:true,database:dbOk,dbError:dbErr||undefined,dbDiag,serverStarted:SERVER_STARTED,auth:REQUIRE_AUTH&&!!SUPABASE_URL});}
  if(req.method==='GET'&&url.pathname==='/api/config')return json(res,200,{supabaseUrl:SUPABASE_URL,supabaseAnonKey:SUPABASE_ANON_KEY,authRequired:REQUIRE_AUTH});
  if(req.method==='GET'&&url.pathname==='/api/rtc-config'){try{await authenticateHttp(req);return json(res,200,{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'},...(TURN_URL?[{urls:TURN_URL,username:TURN_USERNAME,credential:TURN_CREDENTIAL}]:[])]});}catch(e){return json(res,e.status||401,{error:e.message})}}
   if(!pool&&!SUPABASE_URL)return json(res,503,{error:'Database service not configured'});if(parts[0]!=='api')return false;
