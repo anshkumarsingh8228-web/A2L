@@ -181,6 +181,8 @@ create policy "profiles editable by owner" on public.profiles for update to auth
 -- Friendships policies
 drop policy if exists friendships_member_select on public.friendships;
 create policy friendships_member_select on public.friendships for select to authenticated using (user_a = (select auth.uid()) or user_b = (select auth.uid()));
+drop policy if exists friendships_insert on public.friendships;
+create policy friendships_insert on public.friendships for insert to authenticated with check (user_a = (select auth.uid()) or user_b = (select auth.uid()));
 
 -- Friend requests policies
 drop policy if exists friend_requests_member_select on public.friend_requests;
@@ -201,8 +203,12 @@ create policy chat_requests_receiver_update on public.chat_requests for update t
 -- Conversations & Members policies
 drop policy if exists conversations_member_select on public.conversations;
 create policy conversations_member_select on public.conversations for select to authenticated using (exists (select 1 from public.conversation_members cm where cm.conversation_id = id and cm.user_id = (select auth.uid())));
+drop policy if exists conversations_insert on public.conversations;
+create policy conversations_insert on public.conversations for insert to authenticated with check (true);
 drop policy if exists conversation_members_select on public.conversation_members;
 create policy conversation_members_select on public.conversation_members for select to authenticated using (user_id = (select auth.uid()) or exists (select 1 from public.conversation_members cm2 where cm2.conversation_id = conversation_id and cm2.user_id = (select auth.uid())));
+drop policy if exists conversation_members_insert on public.conversation_members;
+create policy conversation_members_insert on public.conversation_members for insert to authenticated with check (true);
 
 -- Messages policies
 drop policy if exists messages_member_select on public.messages;
