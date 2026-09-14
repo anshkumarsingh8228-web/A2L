@@ -131,7 +131,28 @@ async function ensureProfile(c,p={}){
     await sb(`profiles?id=eq.${c.authUserId}`,'PATCH',{a2l_id:a2l,username:a2l,display_name:p.displayName||'A2L user',avatar_url:p.avatar||null,photo_data:p.photoData||null,bio:p.bio||'',location:p.location||'',age_group:p.ageGroup||'',languages:p.languages||[],interests:p.interests||[],looking_for:p.lookingFor||[],visibility:p.visibility||'public',privacy:p.privacy||{},match_prefs:p.matchPrefs||{}},c.token);
   }
 }
-function publicPeerRow(r){return {a2lId:r.a2l_id||r.username||`a2l_${String(r.id).slice(0,8)}`,displayName:r.display_name||'A2L user',avatar:r.avatar_url||'🙂',photoData:r.photo_data||'',ageGroup:r.age_group||'',languages:r.languages||[],interests:r.interests||[],location:r.location||''};}
+function isDiagnosticUser(r){
+  if(!r) return false;
+  const a2l = String(r.a2l_id || r.username || r.a2lId || '').toLowerCase();
+  const name = String(r.display_name || r.displayName || '').toLowerCase();
+  if(/^(test|diag|demo|sig_[ab]|live[ab]|clear[ab]|usr_[ab])_/i.test(a2l)) return true;
+  if(name.includes('tester') || name.includes('test user') || name.includes('e2e test')) return true;
+  return false;
+}
+function publicPeerRow(r){
+  return {
+    id: r.id,
+    authUserId: r.id,
+    a2lId: r.a2l_id||r.username||`a2l_${String(r.id).slice(0,8)}`,
+    displayName: r.display_name||'A2L user',
+    avatar: r.avatar_url||'🙂',
+    photoData: r.photo_data||'',
+    ageGroup: r.age_group||'',
+    languages: r.languages||[],
+    interests: r.interests||[],
+    location: r.location||''
+  };
+}
 async function profileByA2L(param,token=''){
   const val=String(param||'').trim();
   if(!val)return {rows:[]};
@@ -344,6 +365,47 @@ async function api(req,res,body){
      });
      return json(res,200,result);
    }
+    if(req.method==='GET'&&parts[1]==='strangers'){
+      let rows=[];
+      try{
+        const r=await q(`select p.*,
+          (select m.body from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id order by m.created_at desc limit 1) as last_message,
+          (select m.created_at from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id order by m.created_at desc limit 1) as last_message_at,
+          (select count(*)::int from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id where m.sender_id=p.id and m.read_at is null) as unread_count,
+          c.id as conversation_id
+          from profiles p
+          join (
+            select distinct case when cr.sender_id=$1 then cr.receiver_id else cr.sender_id end as peer_id,
+              cm1.conversation_id
+            from chat_requests cr
+            join conversation_members cm1 on cm1.user_id = $1
+            join conversation_members cm2 on cm2.conversation_id = cm1.conversation_id and cm2.user_id = case when cr.sender_id=$1 then cr.receiver_id else cr.sender_id end
+            where (cr.sender_id = $1 or cr.receiver_id = $1) and cr.status = 'accepted'
+          ) peer_convs on peer_convs.peer_id = p.id
+          join conversations c on c.id = peer_convs.conversation_id
+          where not exists (
+            select 1 from friendships f where (f.user_a = $1 and f.user_b = p.id) or (f.user_b = $1 and f.user_a = p.id)
+          )`,[uid]);
+        rows=r.rows;
+      }catch(e){
+        console.warn('strangers query:',e.message);
+      }
+      const result=rows.map(r=>{
+        const pub=publicPeerRow(r);
+        if(isDiagnosticUser(pub))return null;
+        const targetA2L=cleanId(pub.a2lId);
+        const isOnline=clients.has(targetA2L)&&clients.get(targetA2L).ws.readyState===1;
+        return {
+          ...pub,
+          online:isOnline,
+          lastMessage:r.last_message||null,
+          lastMessageAt:r.last_message_at||null,
+          unreadCount:Number(r.unread_count||0),
+          conversationId:r.conversation_id||null
+        };
+      }).filter(Boolean);
+      return json(res,200,result);
+    }
    if(req.method==='GET'&&parts[1]==='users'&&parts[2]==='search'){
      const term=String(url.searchParams.get('q')||'').trim().toLowerCase().slice(0,50);
      if(!term||term.length<1)return json(res,200,[]);
@@ -358,6 +420,7 @@ async function api(req,res,body){
      const results=await Promise.all(rows.map(async p=>{
        const pub=publicPeerRow(p);
        if(await isBlocked(id,pub.a2lId))return null;
+       if(isDiagnosticUser(pub)&&!term.startsWith('test')&&!term.startsWith('live')&&!term.startsWith('usr_'))return null;
        let status='none';
        try{
          const isFriend=await q('select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1) limit 1',[uid,p.id]);
@@ -399,7 +462,22 @@ async function api(req,res,body){
      try{await q('update chat_requests set status=$1,updated_at=now() where id=$2',[body.accepted?'accepted':'declined',body.requestId]);}catch{
        await sb(`chat_requests?id=eq.${body.requestId}`,'PATCH',{status:body.accepted?'accepted':'declined'},ctx.token);
      }
-     const from=await profileByA2L(x.sender_id,ctx.token);await notify(from.rows[0]?.a2l_id,body.accepted?'chat_accepted':'chat_declined',id,{requestId:body.requestId});return json(res,200,{ok:true});
+     let cid=null;
+     if(body.accepted){
+       try{
+         let cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,x.sender_id]);
+         if(!cr.rows[0]){
+           const created=await q(`insert into conversations(kind) values('direct') returning id`,[]);
+           cid=created.rows[0].id;
+           await q(`insert into conversation_members(conversation_id,user_id) values($1,$2),($1,$3)`,[cid,uid,x.sender_id]);
+         }else cid=cr.rows[0].id;
+       }catch(e){
+         console.warn('chat-response conversation setup:',e.message);
+       }
+     }
+     const from=await profileByA2L(x.sender_id,ctx.token);
+     await notify(from.rows[0]?.a2l_id,body.accepted?'chat_accepted':'chat_declined',id,{requestId:body.requestId,conversationId:cid});
+     return json(res,200,{ok:true,conversationId:cid});
    }
    if(req.method==='GET'&&parts[1]==='history'){
      try{const r=await q(`select h.*,case when h.user_a=$1 then h.user_b else h.user_a end as other_id,p.a2l_id as other_a2l_id,p.display_name,p.avatar_url,p.photo_data from connection_history h join profiles p on p.id=case when h.user_a=$1 then h.user_b else h.user_a end where h.user_a=$1 or h.user_b=$1 order by h.last_seen_at desc limit 100`,[uid]);return json(res,200,r.rows);}catch{}
@@ -475,12 +553,14 @@ async function api(req,res,body){
        cid=cr.rows[0]?.id;
        if(cid){
          await q(`update messages set read_at=now() where conversation_id=$1 and sender_id=$2 and read_at is null`,[cid,to]);
+         await q(`update notifications set read_at=now() where user_id=$1 and actor_id=$2 and read_at is null`,[uid,to]).catch(()=>{});
        }
      }catch{
        const convs=await sb(`conversation_members?user_id=eq.${uid}&select=conversation_id`,'GET',null,ctx.token);
        if(Array.isArray(convs)&&convs.length){
          const cids=convs.map(c=>c.conversation_id);
          await sb(`messages?conversation_id=in.(${cids.join(',')})&sender_id=eq.${to}&read_at=is.null`,'PATCH',{read_at:new Date().toISOString()},ctx.token);
+         await sb(`notifications?user_id=eq.${uid}&actor_id=eq.${to}&read_at=is.null`,'PATCH',{read_at:new Date().toISOString()},ctx.token).catch(()=>{});
        }
      }
      const tc=clients.get(targetA2L);
@@ -518,11 +598,11 @@ async function api(req,res,body){
      }
      return json(res,200,{ok:true,cleared:true,conversationId:cid});
    }
-   if(req.method==='GET'&&parts[1]==='messages'&&parts[2]){
-     try{const r=await q(`select m.* from messages m join conversation_members cm on cm.conversation_id=m.conversation_id where m.conversation_id=$1 and cm.user_id=$2 order by m.created_at asc limit 500`,[parts[2],uid]);return json(res,200,r.rows);}catch{}
-     const rest=await sb(`messages?conversation_id=eq.${parts[2]}&order=created_at.asc&limit=500`,'GET',null,ctx.token);
-     return json(res,200,Array.isArray(rest)?rest:[]);
-   }
+    if(req.method==='GET'&&parts[1]==='messages'&&parts[2]){
+      try{const r=await q(`select m.*, p.a2l_id as sender_a2l_id, (m.sender_id = $1) as mine from messages m join conversation_members cm on cm.conversation_id=m.conversation_id left join profiles p on p.id=m.sender_id where m.conversation_id=$2 and cm.user_id=$1 order by m.created_at asc limit 500`,[uid,parts[2]]);return json(res,200,r.rows);}catch{}
+      const rest=await sb(`messages?conversation_id=eq.${parts[2]}&order=created_at.asc&limit=500`,'GET',null,ctx.token);
+      return json(res,200,Array.isArray(rest)?rest.map(row=>({...row,mine:row.sender_id===uid})):[]);
+    }
    if(req.method==='GET'&&parts[1]==='conversation'){
      const targetA2L=cleanId(url.searchParams.get('to'));
      const t=await profileByA2L(targetA2L,ctx.token),to=t.rows[0]?.id;if(!to)return json(res,400,{error:'Invalid user'});
@@ -532,7 +612,8 @@ async function api(req,res,body){
        if(c.rows[0]){
          cid=c.rows[0].id;
          q(`update messages set read_at=now() where conversation_id=$1 and sender_id=$2 and read_at is null`,[cid,to]).catch(()=>{});
-         const r=await q('select * from messages where conversation_id=$1 order by created_at asc limit 500',[cid]);
+         q(`update notifications set read_at=now() where user_id=$1 and actor_id=$2 and read_at is null`,[uid,to]).catch(()=>{});
+         const r=await q(`select m.*, p.a2l_id as sender_a2l_id, (m.sender_id = $1) as mine from messages m left join profiles p on p.id=m.sender_id where m.conversation_id=$2 order by m.created_at asc limit 500`,[uid,cid]);
          msgs=r.rows;
        }
      }catch{
@@ -540,7 +621,9 @@ async function api(req,res,body){
        if(Array.isArray(convs)&&convs.length){
          const cids=convs.map(c=>c.conversation_id);
          const m=await sb(`messages?conversation_id=in.(${cids.join(',')})&order=created_at.asc&limit=500`,'GET',null,ctx.token);
-         if(Array.isArray(m))msgs=m;
+         if(Array.isArray(m)){
+           msgs=m.map(row=>({...row,mine:row.sender_id===uid}));
+         }
        }
      }
      const tc=clients.get(targetA2L);

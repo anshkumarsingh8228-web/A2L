@@ -3,6 +3,7 @@
 function chatAccess(c){
   if(!c) return {allowed:false,reason:"missing"};
   if(c.source==="friend" || (activeChatId && (state.connections||[]).map(Number).includes(Number(activeChatId)))) return {allowed:true,reason:"friend"};
+  if(c.source==="stranger" || c.source==="chat_request") return {allowed:true,reason:"stranger"};
   if(state.premium) return {allowed:true,reason:"premium"};
   if(c.ended===true) return {allowed:false,reason:"ended"};
   if(c.locked===true) return {allowed:false,reason:"locked"};
@@ -192,58 +193,81 @@ function chatCategoryOf(id){
 }
 
 function renderChatRequests(){
-  const reqs=Object.values(state.connectionRequests||{}).filter(r=>r&&r.status==="pending");
-  if(!reqs.length){
-    return '<div class="card empty chat-empty-state">No pending friend requests. 📩</div>';
+  const friendReqs=Object.values(state.connectionRequests||{}).filter(r=>r&&r.status==="pending");
+  const chatReqs=Object.values(state.chatRequests||{}).filter(r=>r&&r.status==="pending");
+  const allReqs=[
+    ...friendReqs.map(r=>({...r,isChatReq:false})),
+    ...chatReqs.map(r=>({...r,isChatReq:true}))
+  ];
+  if(!allReqs.length){
+    return '<div class="card empty chat-empty-state">No pending requests. 📩</div>';
   }
-  return `<div class="chat-request-list">${reqs.map(r=>{
+  return `<div class="chat-request-list">${allReqs.map(r=>{
     const senderA2L=r.from_user||r.from||r.fromA2lId||'';
     const name=r.fromName||senderA2L||"A2L user";
     const avatarContent=r.photoData?`<img src="${r.photoData}" alt="${escapeHTML(name)}" class="chat-photo-thumb">`:(r.avatar||"🙂");
+    const subText=r.isChatReq?"wants to chat with you":"wants to connect";
     return `<div class="chat-request-row">
       <div class="avatar">${avatarContent}</div>
       <div class="preview">
         <b>${escapeHTML(name)}</b>
-        <span class="muted chat-req-handle">@${escapeHTML(senderA2L)} wants to connect</span>
+        <span class="muted chat-req-handle">@${escapeHTML(senderA2L)} ${subText}</span>
       </div>
       <div class="chat-request-actions">
         <button class="secondary" type="button" data-chat-request-decline="${escapeHTML(r.id)}">Decline</button>
-        <button class="primary" type="button" data-chat-request-accept="${escapeHTML(r.id)}">Accept 🤝</button>
+        <button class="primary" type="button" data-chat-request-accept="${escapeHTML(r.id)}">Accept ${r.isChatReq?'💬':'🤝'}</button>
       </div>
     </div>`;
   }).join("")}</div>`;
 }
 
 async function acceptChatRequest(requestId){
-  const r=state.connectionRequests?.[requestId];
+  const r=state.connectionRequests?.[requestId] || state.chatRequests?.[requestId];
   if(!r)return;
+  const isDirectChat = !!state.chatRequests?.[requestId];
   try{
-    await window.a2lBackend?.friendResponse?.(requestId,true);
-    r.status="accepted";
-    r.acceptedAt=Date.now();
-    save();
-    window.updateRequestsTabBadge?.();
-    toast("Friend request accepted! 🤝");
-    await window.a2lHydrateFriends?.();
-    setChatCategory("friends");
+    if(isDirectChat){
+      await window.a2lBackend?.chatResponse?.(requestId,true);
+      r.status="accepted";
+      r.acceptedAt=Date.now();
+      save();
+      window.updateRequestsTabBadge?.();
+      toast("Chat request accepted! 💬");
+      await window.a2lHydrateStrangers?.();
+      setChatCategory("strangers");
+    }else{
+      await window.a2lBackend?.friendResponse?.(requestId,true);
+      r.status="accepted";
+      r.acceptedAt=Date.now();
+      save();
+      window.updateRequestsTabBadge?.();
+      toast("Friend request accepted! 🤝");
+      await window.a2lHydrateFriends?.();
+      setChatCategory("friends");
+    }
   }catch(e){
-    toast(e.message||"Could not accept friend request");
+    toast(e.message||"Could not accept request");
   }
 }
 
 async function declineChatRequest(requestId){
-  const r=state.connectionRequests?.[requestId];
+  const r=state.connectionRequests?.[requestId] || state.chatRequests?.[requestId];
   if(!r)return;
+  const isDirectChat = !!state.chatRequests?.[requestId];
   try{
-    await window.a2lBackend?.friendResponse?.(requestId,false);
+    if(isDirectChat){
+      await window.a2lBackend?.chatResponse?.(requestId,false);
+    }else{
+      await window.a2lBackend?.friendResponse?.(requestId,false);
+    }
     r.status="declined";
     r.declinedAt=Date.now();
     save();
     window.updateRequestsTabBadge?.();
     renderChats();
-    toast("Friend request declined");
+    toast(isDirectChat?"Chat request declined":"Friend request declined");
   }catch(e){
-    toast(e.message||"Could not decline friend request");
+    toast(e.message||"Could not decline request");
   }
 }
 
@@ -363,26 +387,48 @@ function renderChats(){
   // Strangers tab
   $("newFriendChat")?.classList.add("hidden");
   const strangerDeletedSet=new Set((state.deletedChats||[]).map(String));
-  const strangerIds=Object.keys(state.chats).map(Number).filter(id=>state.chats[id]&&!strangerDeletedSet.has(String(id))&&chatCategoryOf(id)==="strangers");
-  $("chatList").innerHTML=strangerIds.length?strangerIds.map(id=>{
-    const f=friends.find(x=>x.id===id); const c=state.chats[id]||{}; const msgs=c.messages||[]; const last=msgs[msgs.length-1];
-    const access=chatAccess(c);
-    const locked=!access.allowed;
+  const realStrangers=(window.__a2lRealStrangers||[]).filter(s=>{
+    if(!s||!s.a2lId)return false;
+    if(strangerDeletedSet.has(String(s.localId))||strangerDeletedSet.has(String(s.a2lId))||strangerDeletedSet.has(String(s.id)))return false;
+    return true;
+  });
+  $("chatList").innerHTML=realStrangers.length?realStrangers.map(s=>{
+    const localId=s.localId||s.id;
+    const f=friends.find(x=>x.a2lId===s.a2lId||x.id===localId);
+    const id=f?f.id:localId;
+    const c=state.chats[id]||{};
+    const msgs=c.messages||[];
+    const last=msgs[msgs.length-1];
+    const lastText=s.lastMessage||last?.text||"Chat request accepted. Say hi! 👋";
+    const lastTime=s.lastMessageAt?new Date(s.lastMessageAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):last?.at?new Date(last.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'';
+    const unread=Number(s.unreadCount||0);
+    const avatarContent=s.photoData?`<img src="${s.photoData}" alt="${escapeHTML(s.displayName||s.a2lId)}" class="chat-photo-thumb">`:(s.avatar||"🙂");
     return `<div class="chatrow" data-open-chat="${id}" data-chat-select="${id}">
       <div class="chat-select-check" aria-hidden="true"></div>
-      <div class="avatar chat-profile-avatar" data-open-profile="${id}" role="button" tabindex="0" title="Open profile" aria-label="Open ${escapeHTML(f?.name||"Stranger")} profile">${f?.avatar||"🙂"}</div>
-      <div class="preview"><b>${escapeHTML(f?.name||"Stranger")}</b><span class="muted">${locked?"🔒 Chat locked":safeText(last?.text||"")}</span></div>
-      <div class="chat-actions"><span>${locked?"💬":"›"}</span></div>
+      <div class="avatar-wrap">
+        <div class="avatar chat-profile-avatar" data-open-profile="${id}" role="button" tabindex="0" title="Open profile">${avatarContent}</div>
+        <span class="presence-dot ${s.online?'online':'offline'}" title="${s.online?'Online':'Offline'}"></span>
+      </div>
+      <div class="preview">
+        <div class="row between items-center">
+          <b>${escapeHTML(s.displayName||s.a2lId)} <small class="muted chat-a2l-handle">@${escapeHTML(s.a2lId)}</small></b>
+          ${lastTime?`<span class="muted chat-time">${lastTime}</span>`:''}
+        </div>
+        <div class="row between items-center chat-snippet-row">
+          <span class="muted chat-snippet">${safeText(lastText)}</span>
+          ${unread>0?`<span class="unread-badge">${unread}</span>`:''}
+        </div>
+      </div>
+      <div class="chat-actions chatrow-actions">
+        <span class="chatrow-arrow">›</span>
+      </div>
     </div>`;
   }).join(""):`<div class="card empty chat-empty-state">No stranger chats yet. 🌐</div>`;
 
   setupChatSelection();
 
   qsa("[data-open-chat]").forEach(x=>x.onclick=()=>{
-    const id=Number(x.dataset.openChat), c=state.chats[id]||{};
-    if(!chatAccess(c).allowed){
-      openProfile(id);toast("Unlock Premium to access this chat");return;
-    }
+    const id=Number(x.dataset.openChat);
     openChat(id);
   });
 
@@ -591,6 +637,22 @@ function openChat(id){
       friends.push(f);
     }
   }
+  if(!f&&window.__a2lRealStrangers){
+    const s=window.__a2lRealStrangers.find(x=>x.a2lId===id||x.id===id||x.localId===id);
+    if(s){
+      f={
+        id:s.localId||(Math.floor(Math.random()*900000000)+100000000),
+        name:s.displayName||s.a2lId,
+        a2lId:s.a2lId,
+        avatar:s.avatar||'🙂',
+        photoData:s.photoData||'',
+        online:!!s.online,
+        isRealFriend:false,
+        isStranger:true
+      };
+      friends.push(f);
+    }
+  }
   if(!f)return;
   const idNum=f.id;
   // If chat was previously removed from chat list, restore it now that user opened it
@@ -600,9 +662,9 @@ function openChat(id){
   }
   activeChatProfile=false;
   activeChatId=idNum;
-  state.chats[idNum]=state.chats[idNum]||{messages:[],source:"friend",ended:false,locked:false,startedAt:Date.now()};
+  state.chats[idNum]=state.chats[idNum]||{messages:[],source:f.isRealFriend?"friend":"stranger",ended:false,locked:false,startedAt:Date.now()};
   const c=state.chats[idNum];
-  c.source="friend";
+  c.source=f.isRealFriend?"friend":"stranger";
   c.ended=false;
   c.locked=false;
   f.unreadCount=0;
@@ -647,13 +709,20 @@ function openChat(id){
   // Hydrate conversation from server
   window.a2lBackend?.conversation?.(f.a2lId).then(data=>{
     if(!data)return;
-    c.messages=(data.messages||[]).map(m=>({
-      id:m.id,
-      text:m.body,
-      mine:m.sender_id===state.profile.a2lId||m.sender_id===state.profile.id,
-      at:new Date(m.created_at).getTime(),
-      status:m.read_at?'read':(m.delivered_at?'delivered':'sent')
-    }));
+    const myUid=state.profile?.id||state.profile?.authUserId;
+    const myA2L=String(state.profile?.a2lId||'').toLowerCase();
+    c.messages=(data.messages||[]).map(m=>{
+      const isMine = (typeof m.mine === 'boolean')
+        ? m.mine
+        : (m.sender_id === myUid || String(m.sender_id).toLowerCase() === myA2L || String(m.sender_a2l_id).toLowerCase() === myA2L);
+      return {
+        id:m.id,
+        text:m.body,
+        mine:Boolean(isMine),
+        at:new Date(m.created_at).getTime(),
+        status:m.read_at?'read':(m.delivered_at?'delivered':'sent')
+      };
+    });
     c.serverConversationId=data.id||null;
     save();
     renderMessages(idNum);

@@ -30,6 +30,7 @@
     history:()=>api('/api/history'),
     requests:()=>api('/api/requests'),
     friends:()=>api('/api/friends'),
+    strangers:()=>api('/api/strangers'),
     conversation:to=>api('/api/conversation?to='+encodeURIComponent(to)),
     me:()=>api('/api/me')
   };
@@ -55,6 +56,7 @@
     await syncIdentity();
     backendSaveProfile();
     await hydrateFriends();
+    await hydrateStrangers();
     await hydrateRequests();
     loadNotifications();
   }
@@ -107,6 +109,51 @@
     }catch(e){console.warn('hydrateFriends error:',e.message);}
   }
 
+  async function hydrateStrangers(){
+    try{
+      const rows=await window.a2lBackend.strangers();
+      window.__a2lRealStrangers=Array.isArray(rows)?rows:[];
+      for(const s of window.__a2lRealStrangers){
+        if(!s?.a2lId)continue;
+        let existing=friends.find(f=>f.a2lId===s.a2lId);
+        if(!existing){
+          existing={
+            id:Math.floor(Math.random()*900000000)+100000000,
+            name:s.displayName||s.a2lId,
+            a2lId:s.a2lId,
+            avatar:s.avatar||'🙂',
+            photoData:s.photoData||'',
+            ageGroup:s.ageGroup||'',
+            languages:s.languages||['english'],
+            online:!!s.online,
+            interests:s.interests||[],
+            bio:s.bio||'',
+            isRealFriend:false,
+            isStranger:true,
+            lastMessage:s.lastMessage||null,
+            lastMessageAt:s.lastMessageAt||null,
+            unreadCount:Number(s.unreadCount||0),
+            conversationId:s.conversationId||null
+          };
+          friends.push(existing);
+        }else{
+          existing.name=s.displayName||existing.name;
+          existing.avatar=s.avatar||existing.avatar;
+          existing.photoData=s.photoData||existing.photoData;
+          existing.online=!!s.online;
+          existing.lastMessage=s.lastMessage!==undefined?s.lastMessage:existing.lastMessage;
+          existing.lastMessageAt=s.lastMessageAt!==undefined?s.lastMessageAt:existing.lastMessageAt;
+          existing.unreadCount=s.unreadCount!==undefined?Number(s.unreadCount):existing.unreadCount;
+          existing.conversationId=s.conversationId||existing.conversationId;
+          existing.isStranger=true;
+        }
+        s.localId=existing.id;
+      }
+      if(typeof renderChats==='function')renderChats();
+    }catch(e){console.warn('hydrateStrangers error:',e.message);}
+  }
+  window.a2lHydrateStrangers=hydrateStrangers;
+
   async function hydrateRequests(){
     try{
       const data=await window.a2lBackend.requests();
@@ -155,12 +202,26 @@
     if(e.detail?.session)boot();
   });
 
-  async function loadNotifications(){
+  function isChatOpenWith(peerA2L){
+    if(!peerA2L)return false;
+    const chatScreen=document.getElementById("chat");
+    if(!chatScreen||!chatScreen.classList.contains("active"))return false;
+    const p=String(peerA2L).trim().toLowerCase();
+    const currentFriend=friends.find(f=>f.id===activeChatId||f.id===Number(activeChatId)||String(f.a2lId).toLowerCase()===p);
+    if(currentFriend&&String(currentFriend.a2lId).toLowerCase()===p)return true;
+    if(typeof activeChatId==='string'&&activeChatId.toLowerCase()===p)return true;
+    const currentStranger=(window.__a2lRealStrangers||[]).find(s=>s.id===activeChatId||s.localId===activeChatId||String(s.a2lId).toLowerCase()===p);
+    if(currentStranger&&String(currentStranger.a2lId).toLowerCase()===p)return true;
+    return false;
+  }
+  window.isChatOpenWith=isChatOpenWith;
+
+  async function loadNotifications(opts={}){
     try{
       const rows=await window.a2lBackend.notifications();
       window.__a2lNotifications=rows||[];
       const unread=(rows||[]).filter(x=>!x.read_at).length;
-      if(unread)toast(`${unread} new notification${unread===1?'':'s'} 🔔`);
+      if(unread && !opts.silent)toast(`${unread} new notification${unread===1?'':'s'} 🔔`);
     }catch(e){}
   }
 
@@ -190,18 +251,29 @@
   });
 
   function handleIncomingChatMessage(m){
-    const senderA2L=m.from||m.message?.sender_id;
-    const text=m.message?.body||'';
-    const activePeerA2L=(typeof activeChatId==='string')?activeChatId:(friends.find(f=>f.id===activeChatId)?.a2lId);
-    const isCurrentChatOpen=(document.getElementById("chat")?.classList.contains("active") && activePeerA2L===senderA2L);
+    const senderA2L=m.from||m.message?.sender_a2l_id||m.message?.sender_id;
+    const text=m.message?.body||m.body||'';
+    const isCurrentChatOpen=isChatOpenWith(senderA2L);
 
     // Update friend record's lastMessage
     const f=friends.find(x=>x.a2lId===senderA2L);
     if(f){
       f.lastMessage=text;
       f.lastMessageAt=new Date().toISOString();
-      if(!isCurrentChatOpen){
+      if(isCurrentChatOpen){
+        f.unreadCount=0;
+      }else{
         f.unreadCount=(f.unreadCount||0)+1;
+      }
+    }
+    const stranger=(window.__a2lRealStrangers||[]).find(x=>x.a2lId===senderA2L);
+    if(stranger){
+      stranger.lastMessage=text;
+      stranger.lastMessageAt=new Date().toISOString();
+      if(isCurrentChatOpen){
+        stranger.unreadCount=0;
+      }else{
+        stranger.unreadCount=(stranger.unreadCount||0)+1;
       }
     }
 
@@ -211,8 +283,8 @@
     }
 
     // Update conversation in state.chats
-    const targetKey=f?f.id:senderA2L;
-    state.chats[targetKey]=state.chats[targetKey]||{messages:[],source:"friend",ended:false,locked:false,startedAt:Date.now()};
+    const targetKey=f?f.id:(stranger?.localId||senderA2L);
+    state.chats[targetKey]=state.chats[targetKey]||{messages:[],source:f?.isRealFriend?"friend":"stranger",ended:false,locked:false,startedAt:Date.now()};
     const incomingMsg={
       id:m.message?.id,
       text,
@@ -229,7 +301,7 @@
       window.a2lBackend.markConversationRead(senderA2L,m.conversationId).catch(()=>{});
     }else{
       if(typeof renderChats==='function')renderChats();
-      toast(`💬 ${f?.name||'New message'}: ${text.slice(0,35)}`);
+      toast(`💬 ${f?.name||stranger?.displayName||'New message'}: ${text.slice(0,35)}`);
     }
   }
 
@@ -274,9 +346,17 @@
   window.addEventListener('a2l:notification',e=>{
     const n=e.detail||{};
     const t=n.type||'';
+    const senderA2L=n.actorId||n.actor_a2l_id||n.from||n.payload?.from||n.payload?.message?.sender_a2l_id;
+    const isViewing=isChatOpenWith(senderA2L);
+
     if(t==='message'){
-      // Notification handled in ws-message; refresh state
+      if(isViewing){
+        // Suppress notifications popup and count increment when inside the active chat
+        loadNotifications({ silent: true });
+        return;
+      }
       hydrateFriends();
+      hydrateStrangers();
     }else if(t==='friend_request'){
       hydrateRequests();
       toast('New friend request 🤝');
@@ -288,6 +368,9 @@
     }else if(t==='chat_request'){
       hydrateRequests();
       toast('New chat request 📩');
+    }else if(t==='chat_accepted'){
+      hydrateStrangers();
+      toast('Chat request accepted! 🎉');
     }
     loadNotifications();
   });

@@ -31,6 +31,10 @@ state.profile=Object.assign({displayName:"You",a2lId:makeA2LId(),avatar:"💻",a
 if(!state.profile.a2lId)state.profile.a2lId=makeA2LId();
 if(typeof state.likes.__me!=="number")state.likes.__me=0;
 Object.keys(state.chats).forEach(id=>{
+  if(/^[0-9]{1,2}$/.test(id)){
+    delete state.chats[id];
+    return;
+  }
   const c=state.chats[id];
   if(Array.isArray(c)) state.chats[id]={messages:c,source:"friend",ended:false,locked:false};
   else if(c && !Array.isArray(c.messages)) c.messages=[];
