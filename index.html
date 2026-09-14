@@ -362,69 +362,133 @@
 <div class="a2l-modal" id="connectionRequestModal" aria-hidden="true"><div class="card a2l-modal-card"><div class="row between"><div><h2 style="margin:0">Connection request 🤝</h2><p class="muted" id="connectionRequestText" style="margin:5px 0 0"></p></div><button class="secondary" id="connectionRequestClose">✕</button></div><div class="a2l-request-status">Accepting creates a <b>Connected</b> relationship. Removing it later is a deliberate action.</div><div class="a2l-match-actions"><button class="secondary" id="declineConnection">Decline</button><button class="primary" id="acceptConnection">Accept 🤝</button></div></div></div>
 <div class="a2l-modal" id="chatCallModal" aria-hidden="true"><div class="card a2l-modal-card call-modal-card"><div class="row between"><div><h2 id="chatCallTitle" style="margin:0">Start a call</h2><p class="muted" id="chatCallSub" style="margin:5px 0 0">Choose how you want to connect.</p></div><button class="secondary" id="chatCallClose">✕</button></div><div id="callChooser" class="a2l-option-grid" style="margin-top:16px"><button class="a2l-option" id="startVideoCall">📹 Video call<br><small class="muted">Camera + microphone</small></button><button class="a2l-option" id="startVoiceCall">🎙️ Voice call<br><small class="muted">Microphone only</small></button></div><div class="a2l-match-hint" id="callHint">Calls are online-only. Live media is not recorded or stored.</div></div></div>
 <div class="a2l-live-modal" id="matchSessionModal" aria-hidden="true">
-  <div class="a2l-standalone-call" id="standaloneCall">
-    <section class="a2l-call-finding" id="callFinding">
-      <div class="a2l-finding-top">
-        <div class="a2l-avatar-ring" id="findingRemoteAvatar">👋</div>
+  <div class="a2l-standalone-call screen" id="standaloneCall">
+    <section class="finding-state a2l-call-finding" id="callFinding">
+      <div class="finding-top a2l-finding-top">
+        <div class="avatar-ring a2l-avatar-ring" id="findingRemoteAvatar">👋</div>
         <h1 id="findingRemoteName">Finding someone...</h1>
         <p id="findingRemoteMeta">Looking for a live user</p>
       </div>
-      <div class="a2l-center-divider">
-        <div class="a2l-brand-logo"><div class="a2l-badge">A2L</div><div class="a2l-brand-text">Alone<span>2</span>Lone</div></div>
+      
+      <div class="center-divider a2l-center-divider">
+        <div class="brand-logo-container a2l-brand-logo">
+          <div class="a2l-badge">A2L</div>
+          <div class="brand-text a2l-brand-text">Alone<span class="highlight">2</span>Lone</div>
+        </div>
       </div>
-      <div class="a2l-finding-bottom">
-        <div class="a2l-person-wrap"><div class="a2l-person-icon"><span></span><i></i></div><b class="a2l-online-dot"></b></div>
-        <h2>You</h2><p id="findingLocalMeta">Camera starting...</p>
+
+      <div class="finding-bottom a2l-finding-bottom">
+        <div style="position: relative;">
+          <div class="person-icon a2l-person-icon">
+            <span class="person-head"></span>
+            <span class="person-body"></span>
+          </div>
+          <span class="online-dot a2l-online-dot"></span>
+        </div>
+        <h2>You</h2>
+        <p id="findingLocalMeta">Camera starting...</p>
       </div>
-      <button class="a2l-cancel-btn" id="cancelFinding" type="button"><span>×</span> End Call</button>
+      
+      <button class="cancel-btn a2l-cancel-btn" id="cancelFinding" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        End Call
+      </button>
     </section>
 
-    <section class="a2l-connected-call" id="connectedCall" hidden>
-      <div class="a2l-video-box remote">
+    <section class="connected-state a2l-connected-call" id="connectedCall" hidden>
+      <div class="video-box remote a2l-video-box">
         <video id="remoteMatchVideo" autoplay playsinline></video>
         <div class="a2l-call-fallback" id="remoteFallback">
           <div class="a2l-call-avatar" id="remoteMatchAvatar">🙂</div>
           <b id="remoteMatchName">A2L user</b>
           <span id="remoteMatchMeta">Waiting for video…</span>
         </div>
-        <button class="a2l-profile-chip" id="matchProfileChip" type="button" aria-label="Open safety and connection options">
-          <img id="remoteMatchPhoto" src="" alt="">
-          <span class="a2l-profile-copy"><strong id="remoteMatchChipName">A2L user <i></i></strong><small id="remoteMatchChipMeta">Live user</small></span>
-        </button>
-        <button class="a2l-add-friend-standalone" id="matchAddFriend" type="button">＋ Add Friend</button>
-        <div class="a2l-media-toggles">
-          <button id="matchMute" title="Mute microphone" type="button">🎙️</button>
-          <button id="matchSpeaker" title="Mute remote audio" type="button">🔊</button>
-          <button id="matchCamera" title="Camera on/off" type="button">📹</button>
+        
+        <div class="glass-pill profile-chip a2l-profile-chip" id="matchProfileChip">
+          <img id="remoteMatchPhoto" src="https://ui-avatars.com/api/?name=Violet&background=42a5f5&color=fff" alt="Avatar">
+          <div class="profile-text a2l-profile-copy">
+            <strong><span id="remoteMatchChipName">A2L user</span> <span class="status-dot"></span></strong>
+            <span id="remoteMatchChipMeta">Live user</span>
+          </div>
+          <button class="add-friend-btn" id="matchAddFriend" type="button" title="Add Friend">
+            <svg viewBox="0 0 24 24"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          </button>
+        </div>
+        
+        <div class="glass-pill media-toggles a2l-media-toggles">
+          <button id="matchMute" title="Mic" type="button">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+          </button>
+          <button id="matchSpeaker" title="Speaker" type="button">
+            <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          </button>
+          <button id="matchCamera" title="Camera" type="button">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+          </button>
         </div>
       </div>
-      <div class="a2l-call-divider">
-        <div class="a2l-brand-logo"><div class="a2l-badge">A2L</div><div class="a2l-brand-text">Alone<span>2</span>Lone</div></div>
+
+      <div class="center-divider dark a2l-call-divider">
+        <div class="brand-logo-container a2l-brand-logo">
+          <div class="a2l-badge">A2L</div>
+          <div class="brand-text a2l-brand-text">Alone<span class="highlight">2</span>Lone</div>
+        </div>
       </div>
-      <div class="a2l-video-box local">
+
+      <div class="video-box local a2l-video-box">
         <video id="localMatchVideo" autoplay playsinline muted></video>
         <div class="a2l-call-fallback local" id="localFallback"><div class="a2l-call-avatar" id="localMatchAvatar">💻</div><b>Me</b><span id="localMatchMeta">Camera on · Mic on</span></div>
       </div>
-      <div class="a2l-bottom-controls" id="videoControls">
-        <button class="a2l-control-btn" id="matchSwitchCamera" type="button"><span>🔄</span>Switch</button>
-        <button class="a2l-control-btn" id="matchReaction" type="button"><span>☺</span>Emoji</button>
-        <button class="a2l-control-btn end" id="matchEnd" type="button"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></span>End Call</button>
-        <button class="a2l-control-btn" id="matchConnectBottom" type="button"><span>＋</span>Friend</button>
+
+      <div class="bottom-controls a2l-bottom-controls" id="videoControls">
+        <button class="control-btn a2l-control-btn" id="matchSwitchCamera" type="button">
+          <div class="glass-circle">
+            <svg viewBox="0 0 24 24"><path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5H5l2.5-2.5L10 12H8c0 2.21 1.79 4 4 4s4-1.79 4-4-1.79-4-4-4v-2c3.31 0 6 2.69 6 6s-2.69 6-6 6z"/></svg>
+          </div>
+          Switch
+        </button>
+        <button class="control-btn a2l-control-btn" id="matchReaction" type="button">
+          <div class="glass-circle">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2.5-10c.83 0 1.5-.67 1.5-1.5S10.33 7 9.5 7 8 7.67 8 8.5 8.67 10 9.5 10zm5 0c.83 0 1.5-.67 1.5-1.5S15.33 7 14.5 7 13 7.67 13 8.5 13.67 10 14.5 10zm-2.5 7.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>
+          </div>
+          Emoji
+        </button>
+        <button class="control-btn a2l-control-btn end" id="matchEnd" type="button">
+          <div class="end-call-circle">
+            <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+          </div>
+          End Call
+        </button>
+        <button class="control-btn a2l-control-btn" id="matchNext" type="button">
+          <div class="glass-circle">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </div>
+          Switch
+        </button>
       </div>
-      <div class="a2l-bottom-controls" id="voiceControls" hidden>
-        <button class="a2l-control-btn" id="voiceMute" type="button"><span>🎙️</span>Mute</button>
-        <button class="a2l-control-btn" id="voiceVideoSwitch" type="button"><span>📹</span>Video</button>
-        <button class="a2l-control-btn end" id="voiceEnd" type="button"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></span>End Call</button>
-        <button class="a2l-control-btn" id="voiceReaction" type="button"><span>❤️</span>Emoji</button>
+
+      <div class="bottom-controls a2l-bottom-controls" id="voiceControls" hidden>
+        <button class="control-btn a2l-control-btn" id="voiceMute" type="button"><div class="glass-circle">🎙️</div>Mute</button>
+        <button class="control-btn a2l-control-btn" id="voiceVideoSwitch" type="button"><div class="glass-circle">📹</div>Video</button>
+        <button class="control-btn a2l-control-btn end" id="voiceEnd" type="button"><div class="end-call-circle"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></div>End Call</button>
+        <button class="control-btn a2l-control-btn" id="voiceReaction" type="button"><div class="glass-circle">❤️</div>Emoji</button>
       </div>
 
       <div class="a2l-voice-view" id="voiceMatchArea" hidden>
         <div class="a2l-voice-half"><div class="a2l-call-avatar" id="voiceRemoteAvatar">🙂</div><b id="voiceRemoteName">A2L user</b><span id="voiceRemoteMeta">Connecting…</span></div>
-        <div class="a2l-call-divider"><div class="a2l-brand-logo"><div class="a2l-badge">A2L</div><div class="a2l-brand-text">Alone<span>2</span>Lone</div></div></div>
+        <div class="center-divider dark a2l-call-divider"><div class="brand-logo-container a2l-brand-logo"><div class="a2l-badge">A2L</div><div class="brand-text a2l-brand-text">Alone<span class="highlight">2</span>Lone</div></div></div>
         <div class="a2l-voice-half"><div class="a2l-call-avatar">💻</div><b>Me</b><span id="voiceLocalMeta">Mic on · listening</span></div>
       </div>
+
       <div class="a2l-reaction-layer" id="matchReactionLayer" aria-hidden="true"></div>
-      <div class="a2l-reaction-picker" id="reactionPicker" hidden><button type="button">❤️</button><button type="button">😂</button><button type="button">😮</button><button type="button">👍</button><button type="button">👏</button><button type="button">🔥</button></div>
+      <div class="a2l-reaction-picker" id="reactionPicker" hidden>
+        <button type="button">❤️</button>
+        <button type="button">😂</button>
+        <button type="button">😮</button>
+        <button type="button">👍</button>
+        <button type="button">👏</button>
+        <button type="button">🔥</button>
+      </div>
     </section>
   </div>
 </div>
