@@ -66,10 +66,10 @@ async function authContextFromUser(user,requestedId='',token=''){
     }
     return {user,a2lId:id,profile:null,token};
   }catch(e){
-    const rest=await sb(`profiles?id=eq.${user.id}&select=*`,'GET',null,token);
-    if(Array.isArray(rest)&&rest[0])return {user,a2lId:rest[0].a2l_id||rest[0].username||id,profile:rest[0],token};
     const disp=user.user_metadata?.display_name||user.email?.split('@')[0]||'A2L user';
-    await sb('profiles','POST',{id:user.id,a2l_id:id,username:id,display_name:disp},token);
+    await sb(`profiles?id=eq.${user.id}`,'PATCH',{a2l_id:id,username:id,display_name:disp},token);
+    const rest=await sb(`profiles?id=eq.${user.id}&select=*`,'GET',null,token);
+    if(Array.isArray(rest)&&rest[0])return {user,a2lId:rest[0].a2l_id||id,profile:rest[0],token};
     return {user,a2lId:id,profile:{id:user.id,a2l_id:id,display_name:disp},token};
   }
 }
@@ -77,11 +77,12 @@ async function authenticateHttp(req,requestedId=''){const token=bearer(req.heade
 async function authenticateWs(token,requestedId=''){const user=await verifyToken(token);return authContextFromUser(user,requestedId,token)}
 async function ensureProfile(c,p={}){
   if(!c?.authUserId)return;
+  const a2l=cleanId(c.id);
   try{
     await q(`update profiles set username=coalesce($2,username),display_name=$3,avatar_url=$4,photo_data=coalesce($5,photo_data),bio=$6,location=$7,age_group=$8,languages=$9,interests=$10,looking_for=$11,visibility=$12,privacy=$13,match_prefs=$14,updated_at=now(),a2l_id=coalesce(a2l_id,$2) where id=$1`,
-      [c.authUserId,cleanId(c.id),p.displayName||'A2L user',p.avatar||null,p.photoData||null,p.bio||'',p.location||p.city||'',p.ageGroup||'',p.languages||[],p.interests||[],p.lookingFor||[],p.visibility||'public',JSON.stringify(p.privacy||{}),JSON.stringify(p.matchPrefs||{})]);
+      [c.authUserId,a2l,p.displayName||'A2L user',p.avatar||null,p.photoData||null,p.bio||'',p.location||p.city||'',p.ageGroup||'',p.languages||[],p.interests||[],p.lookingFor||[],p.visibility||'public',JSON.stringify(p.privacy||{}),JSON.stringify(p.matchPrefs||{})]);
   }catch(e){
-    await sb(`profiles?id=eq.${c.authUserId}`,'PATCH',{display_name:p.displayName||'A2L user',avatar_url:p.avatar||null,photo_data:p.photoData||null,bio:p.bio||'',location:p.location||'',age_group:p.ageGroup||'',languages:p.languages||[],interests:p.interests||[],looking_for:p.lookingFor||[],visibility:p.visibility||'public',privacy:p.privacy||{},match_prefs:p.matchPrefs||{}},c.token);
+    await sb(`profiles?id=eq.${c.authUserId}`,'PATCH',{a2l_id:a2l,username:a2l,display_name:p.displayName||'A2L user',avatar_url:p.avatar||null,photo_data:p.photoData||null,bio:p.bio||'',location:p.location||'',age_group:p.ageGroup||'',languages:p.languages||[],interests:p.interests||[],looking_for:p.lookingFor||[],visibility:p.visibility||'public',privacy:p.privacy||{},match_prefs:p.matchPrefs||{}},c.token);
   }
 }
 function publicPeerRow(r){return {a2lId:r.a2l_id||r.username||`a2l_${String(r.id).slice(0,8)}`,displayName:r.display_name||'A2L user',avatar:r.avatar_url||'🙂',photoData:r.photo_data||'',ageGroup:r.age_group||'',languages:r.languages||[],interests:r.interests||[],location:r.location||''};}
@@ -449,7 +450,7 @@ async function api(req,res,body){
 }
 function json(res,status,obj){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(obj));return true}
 function readBody(req){return new Promise(resolve=>{let s='';req.on('data',d=>{s+=d;if(s.length>1024*1024)req.destroy()});req.on('end',()=>{try{resolve(s?JSON.parse(s):{})}catch{resolve({})}})})}
-async function handle(c,m){const type=m?.type;if(type==='register'){const ctx=await authenticateWs(m.token,m.id);const id=ctx.a2lId;const old=clients.get(id);if(old&&old!==c){try{old.ws.close(4001,'replaced')}catch{};await endPair(old,false)}c.id=id;c.authUserId=ctx.user.id;c.profile=m.profile||{};c.prefs={};c.busy=false;c.peerId=null;c.public={a2lId:id,displayName:c.profile.displayName||ctx.profile?.display_name||'A2L user',avatar:c.profile.avatar||ctx.profile?.avatar_url||'🙂',photoData:c.profile.photoData||ctx.profile?.photo_data||'',ageGroup:c.profile.ageGroup||ctx.profile?.age_group||'',languages:c.profile.languages||ctx.profile?.languages||[],interests:c.profile.interests||ctx.profile?.interests||[],location:c.profile.location||ctx.profile?.location||''};clients.set(id,c);try{await ensureProfile(c,c.profile)}catch(e){console.error('profile save',e.message)}send(c.ws,{type:'registered',id,database:!!pool,auth:true});return}if(!c.id)return send(c.ws,{type:'error',message:'Register first'});if(type==='profile-update'){c.profile={...c.profile,...(m.profile||{})};c.public={...c.public,...m.profile,a2lId:c.id};try{await ensureProfile(c,c.profile)}catch(e){send(c.ws,{type:'error',message:'Profile save failed'})}send(c.ws,{type:'profile-saved'});return}if(type==='find-match'){await endPair(c,false);c.prefs=m.prefs||{};await pair(c);return}if(type==='cancel-match'){await endPair(c,true,'cancelled');send(c.ws,{type:'cancelled'});return}if(['call-invite','call-accept','call-declined','call-busy'].includes(type)){
+async function handle(c,m){const type=m?.type;if(type==='register'){const ctx=await authenticateWs(m.token,m.id);const id=ctx.a2lId;const old=clients.get(id);if(old&&old!==c){try{old.ws.close(4001,'replaced')}catch{};await endPair(old,false)}c.id=id;c.authUserId=ctx.user.id;c.token=m.token;c.profile=m.profile||{};c.prefs={};c.busy=false;c.peerId=null;c.public={a2lId:id,displayName:c.profile.displayName||ctx.profile?.display_name||'A2L user',avatar:c.profile.avatar||ctx.profile?.avatar_url||'🙂',photoData:c.profile.photoData||ctx.profile?.photo_data||'',ageGroup:c.profile.ageGroup||ctx.profile?.age_group||'',languages:c.profile.languages||ctx.profile?.languages||[],interests:c.profile.interests||ctx.profile?.interests||[],location:c.profile.location||ctx.profile?.location||''};clients.set(id,c);try{await ensureProfile(c,c.profile)}catch(e){console.error('profile save',e.message)}send(c.ws,{type:'registered',id,database:!!pool,auth:true});return}if(!c.id)return send(c.ws,{type:'error',message:'Register first'});if(type==='profile-update'){c.profile={...c.profile,...(m.profile||{})};c.public={...c.public,...m.profile,a2lId:c.id};try{await ensureProfile(c,c.profile)}catch(e){send(c.ws,{type:'error',message:'Profile save failed'})}send(c.ws,{type:'profile-saved'});return}if(type==='find-match'){await endPair(c,false);c.prefs=m.prefs||{};await pair(c);return}if(type==='cancel-match'){await endPair(c,true,'cancelled');send(c.ws,{type:'cancelled'});return}if(['call-invite','call-accept','call-declined','call-busy'].includes(type)){
  const to=cleanId(m.to),p=clients.get(to);if(!p)return send(c.ws,{type:'call-unavailable',to});
  if(type==='call-invite'){const allowed=await canCall(c,p);if(!allowed.ok)return send(c.ws,{type:allowed.reason==='blocked'?'call-blocked':allowed.reason==='privacy'?'call-unavailable':'call-busy',to,from:p.id});c.busy=true;c.peerId=p.id;p.busy=true;p.peerId=c.id;c.historyId=await saveHistory(c,p,'direct');p.historyId=c.historyId}
  else if(!c.peerId||c.peerId!==p.id||!p.peerId||p.peerId!==c.id)return send(c.ws,{type:'error',message:'Call session is not active',status:409});
