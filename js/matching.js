@@ -30,7 +30,7 @@ function openMatchModal(){
 function closeMatchModal(){const m=$("matchModal");if(!m)return;m.classList.remove("show");m.setAttribute("aria-hidden","true");}
 function startQuickMatchDirect(){
   if(state.privacy?.search===false){toast("Find Your Vibe is turned off in Privacy settings.");return;}
-  const prefs={mode:"video",language:"any",age:"same",interest:"any",online:true};
+  const prefs={mode:"video",language:"any",age:"any",interest:"any",online:true};
   state.matchPrefs=prefs;save();
   toast("Finding a random video match… ✨");
   window.a2lCall?.find(prefs,"quick");

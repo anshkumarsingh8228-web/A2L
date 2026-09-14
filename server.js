@@ -22,25 +22,33 @@ async function verifyToken(token){
 }
 async function authContextFromUser(user,requestedId=''){
   if(!user?.id)return null;
-  const existing=await q('select * from profiles where id=$1',[user.id]);
-  if(existing.rows[0])return {user,a2lId:existing.rows[0].a2l_id||existing.rows[0].username||`a2l_${user.id.slice(0,8)}`,profile:existing.rows[0]};
   const desired=cleanId(requestedId||user.user_metadata?.a2l_id||user.user_metadata?.username||'');
   const id=desired||`a2l_${user.id.slice(0,8)}`;
-  const collision=await q('select 1 from profiles where a2l_id=$1',[id]);
-  if(collision.rows[0])throw Object.assign(new Error('A2L ID is already in use'),{status:409});
-  await q('insert into profiles(id,a2l_id,username,display_name) values($1,$2,$2,$3)',[user.id,id,user.user_metadata?.display_name||user.email?.split('@')[0]||'A2L user']);
-  return {user,a2lId:id,profile:null};
+  try{
+    const existing=await q('select * from profiles where id=$1',[user.id]);
+    if(existing.rows[0])return {user,a2lId:existing.rows[0].a2l_id||existing.rows[0].username||id,profile:existing.rows[0]};
+    const collision=await q('select 1 from profiles where a2l_id=$1',[id]);
+    if(!collision.rows[0]){
+      await q('insert into profiles(id,a2l_id,username,display_name) values($1,$2,$2,$3)',[user.id,id,user.user_metadata?.display_name||user.email?.split('@')[0]||'A2L user']);
+    }
+    return {user,a2lId:id,profile:null};
+  }catch(e){
+    console.warn('Database query skipped in authContextFromUser:',e.message);
+    return {user,a2lId:id,profile:{a2l_id:id,display_name:user.user_metadata?.display_name||user.email?.split('@')[0]||'A2L user'}};
+  }
 }
 async function authenticateHttp(req,requestedId=''){const user=await verifyToken(bearer(req.headers));return authContextFromUser(user,requestedId)}
 async function authenticateWs(token,requestedId=''){const user=await verifyToken(token);return authContextFromUser(user,requestedId)}
 async function ensureProfile(c,p={}){
   if(!c?.authUserId)return;
-  await q(`update profiles set username=coalesce($2,username),display_name=$3,avatar_url=$4,photo_data=coalesce($5,photo_data),bio=$6,location=$7,age_group=$8,languages=$9,interests=$10,looking_for=$11,visibility=$12,privacy=$13,match_prefs=$14,updated_at=now(),a2l_id=coalesce(a2l_id,$2) where id=$1`,
-    [c.authUserId,cleanId(c.id),p.displayName||'A2L user',p.avatar||null,p.photoData||null,p.bio||'',p.location||p.city||'',p.ageGroup||'',p.languages||[],p.interests||[],p.lookingFor||[],p.visibility||'public',JSON.stringify(p.privacy||{}),JSON.stringify(p.matchPrefs||{})]);
+  try{
+    await q(`update profiles set username=coalesce($2,username),display_name=$3,avatar_url=$4,photo_data=coalesce($5,photo_data),bio=$6,location=$7,age_group=$8,languages=$9,interests=$10,looking_for=$11,visibility=$12,privacy=$13,match_prefs=$14,updated_at=now(),a2l_id=coalesce(a2l_id,$2) where id=$1`,
+      [c.authUserId,cleanId(c.id),p.displayName||'A2L user',p.avatar||null,p.photoData||null,p.bio||'',p.location||p.city||'',p.ageGroup||'',p.languages||[],p.interests||[],p.lookingFor||[],p.visibility||'public',JSON.stringify(p.privacy||{}),JSON.stringify(p.matchPrefs||{})]);
+  }catch(e){console.warn('ensureProfile failed:',e.message);}
 }
 function publicPeerRow(r){return {a2lId:r.a2l_id||r.username||`a2l_${String(r.id).slice(0,8)}`,displayName:r.display_name||'A2L user',avatar:r.avatar_url||'🙂',photoData:r.photo_data||'',ageGroup:r.age_group||'',languages:r.languages||[],interests:r.interests||[],location:r.location||''};}
 function profileByA2L(a2l){return q('select * from profiles where a2l_id=$1',[cleanId(a2l)]);}
-async function isBlocked(a,b){if(!pool||!a||!b)return false;const r=await q(`select 1 from blocks bl join profiles pa on pa.id=bl.blocker_id join profiles pb on pb.id=bl.blocked_id where (pa.a2l_id=$1 and pb.a2l_id=$2) or (pa.a2l_id=$2 and pb.a2l_id=$1) limit 1`,[cleanId(a),cleanId(b)]);return !!r.rows[0]}
+async function isBlocked(a,b){if(!pool||!a||!b)return false;try{const r=await q(`select 1 from blocks bl join profiles pa on pa.id=bl.blocker_id join profiles pb on pb.id=bl.blocked_id where (pa.a2l_id=$1 and pb.a2l_id=$2) or (pa.a2l_id=$2 and pb.a2l_id=$1) limit 1`,[cleanId(a),cleanId(b)]);return !!r.rows[0]}catch{return false}}
 async function areConnected(a,b){if(!pool||!a?.authUserId||!b?.authUserId)return false;try{const r=await q('select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1) limit 1',[a.authUserId,b.authUserId]);return !!r.rows[0]}catch{return false}}
 function privacyValue(c,key,fallback){return profileOf(c)?.privacy?.[key]||fallback}
 async function canCall(c,p){if(!c||!p||c.id===p.id)return {ok:false,reason:'busy'};if(await isBlocked(c.id,p.id))return {ok:false,reason:'blocked'};if(p.busy)return {ok:false,reason:'busy'};const setting=privacyValue(p,'call','everyone');if(setting==='nobody')return {ok:false,reason:'privacy'};if(setting==='connected'&&!(await areConnected(c,p)))return {ok:false,reason:'privacy'};return {ok:true}}
