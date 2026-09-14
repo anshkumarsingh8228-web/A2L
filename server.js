@@ -75,11 +75,11 @@ async function api(req,res,body){
   if(req.method==='GET'&&parts[1]==='notifications'){const r=await q('select * from notifications where user_id=$1 order by created_at desc limit 100',[uid]);return json(res,200,r.rows)}
   if(req.method==='GET'&&parts[1]==='requests'){
     const [f,c,r]=await Promise.all([
-      q("select fr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,pr.a2l_id as to_a2l_id from friend_requests fr join profiles ps on ps.id=fr.sender_id join profiles pr on pr.id=fr.receiver_id where (fr.receiver_id=$1 or fr.sender_id=$1) and fr.status='pending' order by fr.created_at desc limit 100",[uid]),
-      q("select cr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,pr.a2l_id as to_a2l_id from chat_requests cr join profiles ps on ps.id=cr.sender_id join profiles pr on pr.id=cr.receiver_id where (cr.receiver_id=$1 or cr.sender_id=$1) and cr.status='pending' order by cr.created_at desc limit 100",[uid]),
-      q("select rr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,pr.a2l_id as to_a2l_id from reconnect_requests rr join profiles ps on ps.id=rr.from_user join profiles pr on pr.id=rr.to_user where (rr.to_user=$1 or rr.from_user=$1) and rr.status='pending' order by rr.created_at desc limit 100",[uid])
+      q("select fr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,ps.avatar_url as from_avatar,ps.photo_data as from_photo_data,pr.a2l_id as to_a2l_id from friend_requests fr join profiles ps on ps.id=fr.sender_id join profiles pr on pr.id=fr.receiver_id where (fr.receiver_id=$1 or fr.sender_id=$1) and fr.status='pending' order by fr.created_at desc limit 100",[uid]),
+      q("select cr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,ps.avatar_url as from_avatar,ps.photo_data as from_photo_data,pr.a2l_id as to_a2l_id from chat_requests cr join profiles ps on ps.id=cr.sender_id join profiles pr on pr.id=cr.receiver_id where (cr.receiver_id=$1 or cr.sender_id=$1) and cr.status='pending' order by cr.created_at desc limit 100",[uid]),
+      q("select rr.*,ps.a2l_id as from_a2l_id,ps.display_name as from_name,ps.avatar_url as from_avatar,ps.photo_data as from_photo_data,pr.a2l_id as to_a2l_id from reconnect_requests rr join profiles ps on ps.id=rr.from_user join profiles pr on pr.id=rr.to_user where (rr.to_user=$1 or rr.from_user=$1) and rr.status='pending' order by rr.created_at desc limit 100",[uid])
     ]);
-    const norm=(rows)=>rows.map(x=>({...x,from:x.from_a2l_id,to:x.to_a2l_id,from_user:x.from_a2l_id,to_user:x.to_a2l_id,fromName:x.from_name}));
+    const norm=(rows)=>rows.map(x=>({...x,from:x.from_a2l_id,to:x.to_a2l_id,from_user:x.from_a2l_id,to_user:x.to_a2l_id,fromName:x.from_name,avatar:x.from_avatar||'🙂',photoData:x.from_photo_data||''}));
     return json(res,200,{friends:norm(f.rows),chats:norm(c.rows),reconnects:norm(r.rows)})}
   if(req.method==='POST'&&parts[1]==='report'){
     const to=cleanId(body.to),t=await profileByA2L(to);if(!t.rows[0]||to===id)return json(res,400,{error:'Invalid reported user'});const reason=String(body.reason||'Other').trim().slice(0,500)||'Other',context=String(body.context||'general').slice(0,40);const targetId=t.rows[0].id;const r=await q(`insert into reports(reporter_id,reported_id,category,details) values($1,$2,$3,$4) returning id,created_at`,[uid,targetId,reason,context]);return json(res,201,{ok:true,id:r.rows[0].id,createdAt:r.rows[0].created_at});
@@ -88,17 +88,104 @@ async function api(req,res,body){
     const to=cleanId(body.to),t=await profileByA2L(to);if(!t.rows[0]||to===id)return json(res,400,{error:'Invalid user'});await q('insert into blocks(blocker_id,blocked_id) values($1,$2) on conflict(blocker_id,blocked_id) do nothing',[uid,t.rows[0].id]);try{await q('delete from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1)',[uid,t.rows[0].id])}catch{}try{await q("update friend_requests set status='cancelled',updated_at=now() where status='pending' and ((sender_id=$1 and receiver_id=$2) or (sender_id=$2 and receiver_id=$1))",[uid,t.rows[0].id])}catch{}try{await q("update chat_requests set status='cancelled',updated_at=now() where status='pending' and ((sender_id=$1 and receiver_id=$2) or (sender_id=$2 and receiver_id=$1))",[uid,t.rows[0].id])}catch{}const target=clients.get(to);if(target){send(target.ws,{type:'blocked',by:id});await endPair(target,true,'blocked')}return json(res,201,{ok:true});
   }
   if(req.method==='POST'&&parts[1]==='friend-request'){
-    const targetA2L=cleanId(body.to),t=await profileByA2L(targetA2L),to=t.rows[0]?.id;if(!to||to===uid)return json(res,400,{error:'Invalid users'});if(await isBlocked(id,targetA2L))return json(res,403,{error:'User is blocked'});if(t.rows[0].privacy?.requests===false)return json(res,403,{error:'Connection requests are disabled'});
+    const targetA2L=cleanId(body.to),t=await profileByA2L(targetA2L),to=t.rows[0]?.id;
+    if(!to||to===uid)return json(res,400,{error:to===uid?'Cannot add yourself':'Invalid user'});
+    if(await isBlocked(id,targetA2L))return json(res,403,{error:'User is blocked'});
+    if(t.rows[0].privacy?.requests===false)return json(res,403,{error:'Connection requests are disabled'});
+    const existingFriend=await q(`select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1) limit 1`,[uid,to]);
+    if(existingFriend.rows[0])return json(res,400,{error:'Already friends'});
+    const reverseReq=await q(`select * from friend_requests where sender_id=$1 and receiver_id=$2 and status='pending' limit 1`,[to,uid]);
+    if(reverseReq.rows[0]){
+      await q(`update friend_requests set status='accepted',updated_at=now() where id=$1`,[reverseReq.rows[0].id]);
+      const [a,b]=[to,uid].sort();
+      await q(`insert into friendships(user_a,user_b) values($1,$2) on conflict do nothing`,[a,b]);
+      let cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);
+      if(!cr.rows[0]){const created=await q(`insert into conversations(kind) values('direct') returning id`,[]);await q(`insert into conversation_members(conversation_id,user_id) values($1,$2),($1,$3)`,[created.rows[0].id,uid,to]);}
+      const myProf=(await q('select * from profiles where id=$1',[uid])).rows[0];
+      await notify(targetA2L,'friend_accepted',id,{requestId:reverseReq.rows[0].id,friend:publicPeerRow(myProf)});
+      const tc=clients.get(targetA2L);
+      if(tc)send(tc.ws,{type:'friend-accepted',friend:publicPeerRow(myProf)});
+      return json(res,200,{ok:true,status:'accepted',friend:publicPeerRow(t.rows[0])});
+    }
     const r=await q(`insert into friend_requests(sender_id,receiver_id,status) values($1,$2,'pending') on conflict(sender_id,receiver_id) do update set status='pending',updated_at=now() returning *`,[uid,to]);
-    await notify(targetA2L,'friend_request',id,{requestId:r.rows[0].id,request:r.rows[0]});return json(res,201,r.rows[0]);}
+    const myProf=(await q('select * from profiles where id=$1',[uid])).rows[0];
+    await notify(targetA2L,'friend_request',id,{requestId:r.rows[0].id,request:r.rows[0],sender:publicPeerRow(myProf)});
+    const tc=clients.get(targetA2L);
+    if(tc)send(tc.ws,{type:'friend-request-received',request:{...r.rows[0],from:id,fromName:myProf?.display_name||'A2L user',avatar:myProf?.avatar_url||'🙂',photoData:myProf?.photo_data||''}});
+    return json(res,201,r.rows[0]);
+  }
   if(req.method==='POST'&&parts[1]==='friend-response'){
-    const r=await q('select * from friend_requests where id=$1 and receiver_id=$2',[body.requestId,uid]);if(!r.rows[0])return json(res,404,{error:'Request not found'});const x=r.rows[0],status=body.accepted?'accepted':'declined';
+    const r=await q('select * from friend_requests where id=$1 and receiver_id=$2',[body.requestId,uid]);
+    if(!r.rows[0])return json(res,404,{error:'Request not found'});
+    const x=r.rows[0],status=body.accepted?'accepted':'declined';
     await q('update friend_requests set status=$1,updated_at=now() where id=$2',[status,body.requestId]);
-    const from=await q('select a2l_id from profiles where id=$1',[x.sender_id]);
-    if(body.accepted){const [a,b]=[x.sender_id,x.receiver_id].sort();await q(`insert into friendships(user_a,user_b) values($1,$2) on conflict do nothing`,[a,b]);}
-    await notify(from.rows[0]?.a2l_id,body.accepted?'friend_accepted':'friend_declined',id,{requestId:body.requestId});return json(res,200,{ok:true});}
+    const from=await q('select * from profiles where id=$1',[x.sender_id]);
+    const fromA2L=from.rows[0]?.a2l_id;
+    const myProf=(await q('select * from profiles where id=$1',[uid])).rows[0];
+    if(body.accepted){
+      const [a,b]=[x.sender_id,x.receiver_id].sort();
+      await q(`insert into friendships(user_a,user_b) values($1,$2) on conflict do nothing`,[a,b]);
+      let cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,x.sender_id]);
+      if(!cr.rows[0]){
+        const created=await q(`insert into conversations(kind) values('direct') returning id`,[]);
+        await q(`insert into conversation_members(conversation_id,user_id) values($1,$2),($1,$3)`,[created.rows[0].id,uid,x.sender_id]);
+      }
+      if(fromA2L){
+        await notify(fromA2L,'friend_accepted',id,{requestId:body.requestId,friend:publicPeerRow(myProf)});
+        const tc=clients.get(fromA2L);
+        if(tc)send(tc.ws,{type:'friend-accepted',friend:publicPeerRow(myProf)});
+      }
+      return json(res,200,{ok:true,friend:from.rows[0]?publicPeerRow(from.rows[0]):null});
+    }
+    if(fromA2L)await notify(fromA2L,'friend_declined',id,{requestId:body.requestId});
+    return json(res,200,{ok:true});
+  }
   if(req.method==='GET'&&parts[1]==='friends'){
-    const r=await q(`select p.* from profiles p join friendships f on ((f.user_a=$1 and f.user_b=p.id) or (f.user_b=$1 and f.user_a=p.id))`,[uid]);return json(res,200,r.rows.map(publicPeerRow));}
+    let rows=[];
+    try{
+      const r=await q(`select p.*,
+        (select m.body from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id order by m.created_at desc limit 1) as last_message,
+        (select m.created_at from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id order by m.created_at desc limit 1) as last_message_at,
+        (select count(*)::int from messages m join conversation_members cm1 on cm1.conversation_id=m.conversation_id and cm1.user_id=$1 join conversation_members cm2 on cm2.conversation_id=m.conversation_id and cm2.user_id=p.id where m.sender_id=p.id and m.read_at is null) as unread_count,
+        (select cm1.conversation_id from conversation_members cm1 join conversation_members cm2 on cm2.conversation_id=cm1.conversation_id and cm2.user_id=p.id where cm1.user_id=$1 limit 1) as conversation_id
+        from profiles p join friendships f on ((f.user_a=$1 and f.user_b=p.id) or (f.user_b=$1 and f.user_a=p.id))`,[uid]);
+      rows=r.rows;
+    }catch(e){
+      const r=await q(`select p.* from profiles p join friendships f on ((f.user_a=$1 and f.user_b=p.id) or (f.user_b=$1 and f.user_a=p.id))`,[uid]);
+      rows=r.rows;
+    }
+    const result=rows.map(r=>{
+      const pub=publicPeerRow(r);
+      const targetA2L=cleanId(pub.a2lId);
+      const isOnline=clients.has(targetA2L)&&clients.get(targetA2L).ws.readyState===1;
+      return {
+        ...pub,
+        online:isOnline,
+        lastMessage:r.last_message||null,
+        lastMessageAt:r.last_message_at||null,
+        unreadCount:Number(r.unread_count||0),
+        conversationId:r.conversation_id||null
+      };
+    });
+    return json(res,200,result);
+  }
+  if(req.method==='GET'&&parts[1]==='users'&&parts[2]==='search'){
+    const term=String(url.searchParams.get('q')||'').trim().toLowerCase().slice(0,50);
+    if(!term||term.length<1)return json(res,200,[]);
+    const r=await q(`select p.* from profiles p where (p.a2l_id ilike $1 or p.display_name ilike $1) and p.id<>$2 and p.visibility<>'private' order by p.updated_at desc limit 25`,[`%${term}%`,uid]);
+    const results=await Promise.all(r.rows.map(async p=>{
+      const pub=publicPeerRow(p);
+      if(await isBlocked(id,pub.a2lId))return null;
+      const isFriend=await q('select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1) limit 1',[uid,p.id]);
+      if(isFriend.rows[0])return {...pub,status:'friend',online:clients.has(cleanId(pub.a2lId))};
+      const outReq=await q("select 1 from friend_requests where sender_id=$1 and receiver_id=$2 and status='pending' limit 1",[uid,p.id]);
+      if(outReq.rows[0])return {...pub,status:'pending_outgoing',online:clients.has(cleanId(pub.a2lId))};
+      const inReq=await q("select 1 from friend_requests where sender_id=$1 and receiver_id=$2 and status='pending' limit 1",[p.id,uid]);
+      if(inReq.rows[0])return {...pub,status:'pending_incoming',online:clients.has(cleanId(pub.a2lId))};
+      return {...pub,status:'none',online:clients.has(cleanId(pub.a2lId))};
+    }));
+    return json(res,200,results.filter(Boolean));
+  }
   if(req.method==='POST'&&parts[1]==='chat-request'){
     const targetA2L=cleanId(body.to),t=await profileByA2L(targetA2L),to=t.rows[0]?.id;if(!to||to===uid)return json(res,400,{error:'Invalid users'});if(await isBlocked(id,targetA2L))return json(res,403,{error:'User is blocked'});
     const r=await q(`insert into chat_requests(sender_id,receiver_id,status) values($1,$2,'pending') on conflict(sender_id,receiver_id) do update set status='pending',updated_at=now() returning *`,[uid,to]);await notify(targetA2L,'chat_request',id,{requestId:r.rows[0].id,request:r.rows[0]});return json(res,201,r.rows[0]);}
@@ -112,15 +199,63 @@ async function api(req,res,body){
   if(req.method==='POST'&&parts[1]==='reconnect-response'){
     const r=await q('select * from reconnect_requests where id=$1 and to_user=$2',[body.requestId,uid]);if(!r.rows[0])return json(res,404,{error:'Request not found'});const x=r.rows[0];await q('update reconnect_requests set status=$1,responded_at=now() where id=$2',[body.accepted?'accepted':'declined',body.requestId]);const from=await q('select a2l_id from profiles where id=$1',[x.from_user]);await notify(from.rows[0]?.a2l_id,body.accepted?'reconnect_accepted':'reconnect_declined',id,{requestId:body.requestId});return json(res,200,{ok:true});}
   if(req.method==='POST'&&parts[1]==='message'){
-    const t=await profileByA2L(body.to),to=t.rows[0]?.id,text=String(body.text||'').trim().slice(0,2000);if(!text||!to)return json(res,400,{error:'Invalid message'});
-    const targetProfile=(await profileByA2L(body.to)).rows[0];if(!targetProfile)return json(res,404,{error:'User not found'});if(await isBlocked(id,body.to))return json(res,403,{error:'User is blocked'});const connected=await q(`select 1 where exists(select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1))`,[uid,to]);const accepted=await q(`select 1 where exists(select 1 from chat_requests where ((sender_id=$1 and receiver_id=$2) or (sender_id=$2 and receiver_id=$1)) and status='accepted')`,[uid,to]);const messagePrivacy=targetProfile.privacy?.message||'everyone';const allowed=messagePrivacy==='everyone'||(messagePrivacy==='connected'&&connected.rows[0])||(messagePrivacy==='approved'&&accepted.rows[0]);if(!allowed)return json(res,403,{error:'Chat permission required'});
-    let cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);let cid=cr.rows[0]?.id;
-    if(!cid){const created=await q(`insert into conversations(kind) values('direct') returning id`,[]);cid=created.rows[0].id;await q(`insert into conversation_members(conversation_id,user_id) values($1,$2),($1,$3)`,[cid,uid,to]);}
-    const m=await q(`insert into messages(conversation_id,sender_id,body) values($1,$2,$3) returning *`,[cid,uid,text]);await notify(body.to,'message',id,{message:m.rows[0],conversationId:cid});return json(res,201,m.rows[0]);}
+    const targetA2L=cleanId(body.to),t=await profileByA2L(targetA2L),to=t.rows[0]?.id,text=String(body.text||'').trim().slice(0,2000);
+    if(!text||!to)return json(res,400,{error:'Invalid message'});
+    const targetProfile=t.rows[0];
+    if(!targetProfile)return json(res,404,{error:'User not found'});
+    if(await isBlocked(id,targetA2L))return json(res,403,{error:'User is blocked'});
+    const connected=await q(`select 1 from friendships where (user_a=$1 and user_b=$2) or (user_a=$2 and user_b=$1) limit 1`,[uid,to]);
+    const accepted=await q(`select 1 from chat_requests where ((sender_id=$1 and receiver_id=$2) or (sender_id=$2 and receiver_id=$1)) and status='accepted' limit 1`,[uid,to]);
+    const messagePrivacy=targetProfile.privacy?.message||'everyone';
+    const allowed=messagePrivacy==='everyone'||(messagePrivacy==='connected'&&connected.rows[0])||(messagePrivacy==='approved'&&accepted.rows[0])||connected.rows[0];
+    if(!allowed)return json(res,403,{error:'Chat permission required'});
+    let cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);
+    let cid=cr.rows[0]?.id;
+    if(!cid){
+      const created=await q(`insert into conversations(kind) values('direct') returning id`,[]);
+      cid=created.rows[0].id;
+      await q(`insert into conversation_members(conversation_id,user_id) values($1,$2),($1,$3)`,[cid,uid,to]);
+    }
+    const targetClient=clients.get(targetA2L);
+    const isOnline=targetClient&&targetClient.ws.readyState===1;
+    const m=await q(`insert into messages(conversation_id,sender_id,body,delivered_at) values($1,$2,$3,$4) returning *`,[cid,uid,text,isOnline?new Date():null]);
+    const msgRow=m.rows[0];
+    const clientPayload={id:msgRow.id,body:text,sender_id:id,senderA2L:id,mine:false,created_at:msgRow.created_at,at:new Date(msgRow.created_at).getTime(),status:isOnline?'delivered':'sent'};
+    if(isOnline){
+      send(targetClient.ws,{type:'chat-message',from:id,conversationId:cid,message:clientPayload});
+    }
+    await notify(targetA2L,'message',id,{message:msgRow,conversationId:cid,text:text.slice(0,100)});
+    return json(res,201,{...msgRow,mine:true,at:new Date(msgRow.created_at).getTime(),status:isOnline?'delivered':'sent'});
+  }
+  if(req.method==='POST'&&parts[1]==='conversation'&&parts[2]==='read'){
+    const targetA2L=cleanId(body.to||url.searchParams.get('to'));
+    const t=await profileByA2L(targetA2L),to=t.rows[0]?.id;
+    if(!to)return json(res,400,{error:'Invalid user'});
+    const cr=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);
+    const cid=cr.rows[0]?.id;
+    if(cid){
+      await q(`update messages set read_at=now() where conversation_id=$1 and sender_id=$2 and read_at is null`,[cid,to]);
+      const tc=clients.get(targetA2L);
+      if(tc&&tc.ws.readyState===1){
+        send(tc.ws,{type:'messages-read',conversationId:cid,by:id,readAt:new Date().toISOString()});
+      }
+    }
+    return json(res,200,{ok:true});
+  }
   if(req.method==='GET'&&parts[1]==='messages'&&parts[2]){const r=await q(`select m.* from messages m join conversation_members cm on cm.conversation_id=m.conversation_id where m.conversation_id=$1 and cm.user_id=$2 order by m.created_at asc limit 500`,[parts[2],uid]);return json(res,200,r.rows)}
   if(req.method==='GET'&&parts[1]==='conversation'){
-    const t=await profileByA2L(url.searchParams.get('to')),to=t.rows[0]?.id;if(!to)return json(res,400,{error:'Invalid user'});
-    const c=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);if(!c.rows[0])return json(res,200,{id:null,messages:[]});const r=await q('select * from messages where conversation_id=$1 order by created_at asc limit 500',[c.rows[0].id]);return json(res,200,{id:c.rows[0].id,messages:r.rows});}
+    const targetA2L=cleanId(url.searchParams.get('to'));
+    const t=await profileByA2L(targetA2L),to=t.rows[0]?.id;if(!to)return json(res,400,{error:'Invalid user'});
+    const c=await q(`select c.id from conversations c join conversation_members m1 on m1.conversation_id=c.id join conversation_members m2 on m2.conversation_id=c.id where c.kind='direct' and m1.user_id=$1 and m2.user_id=$2 limit 1`,[uid,to]);
+    if(!c.rows[0])return json(res,200,{id:null,messages:[]});
+    const cid=c.rows[0].id;
+    q(`update messages set read_at=now() where conversation_id=$1 and sender_id=$2 and read_at is null`,[cid,to]).catch(()=>{});
+    const tc=clients.get(targetA2L);
+    if(tc&&tc.ws.readyState===1){
+      send(tc.ws,{type:'messages-read',conversationId:cid,by:id,readAt:new Date().toISOString()});
+    }
+    const r=await q('select * from messages where conversation_id=$1 order by created_at asc limit 500',[cid]);
+    return json(res,200,{id:cid,messages:r.rows});}
   return json(res,404,{error:'Not found'});
  }catch(e){console.error('api',e);return json(res,e.status||500,{error:e.message||'Server error'});}
 }

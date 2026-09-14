@@ -157,7 +157,7 @@
     const to=findA2LId(id);if(!to){setStatus('User unavailable');return}
     const wait=()=>{if(window.a2lRealtime?.connected?.())send({type:'call-invite',to,kind,source});else setTimeout(wait,150)};wait();
   }
-  function findA2LId(id){const f=(typeof friends!=='undefined')?friends.find(x=>Number(x.id)===Number(id)):null;return f?.a2lId||String(id||'')}
+  function findA2LId(id){const f=(typeof friends!=='undefined')?friends.find(x=>Number(x.id)===Number(id)||x.a2lId===id):null;return f?.a2lId||String(id||'')}
   function nextMatch(){send({type:'cancel-match'});cleanupPeer();peer=null;setStatus('Finding another user…');find({mode,language:'any',age:'any',interest:'any',online:true},'quick')}
   function toggleMute(){if(!stream)return;muted=!muted;stream.getAudioTracks().forEach(t=>t.enabled=!muted);$('matchMute')?.classList.toggle('muted',muted);setText('voiceMute',muted?'🔇':'🎙️');setText('localMatchMeta',`Camera ${cameraOn?'on':'off'} · Mic ${muted?'off':'on'}`);setText('voiceLocalMeta',`Mic ${muted?'off':'on'} · listening`)}
   function toggleCamera(){if(mode!=='video'||!stream)return;cameraOn=!cameraOn;stream.getVideoTracks().forEach(t=>t.enabled=cameraOn);$('matchCamera')?.classList.toggle('off',!cameraOn);show('localMatchVideo',cameraOn);show('localFallback',!cameraOn);setText('matchCamera',cameraOn?'📹':'🚫');setText('localMatchMeta',`Camera ${cameraOn?'on':'off'} · Mic ${muted?'off':'on'}`)}

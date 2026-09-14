@@ -269,7 +269,7 @@ function renderProfileFriends(){
     list.innerHTML=ids.length?ids.map(id=>{
       const f=friends.find(x=>x.id===id);
       return `<button class="profile-friend-row" type="button" data-profile-friend="${id}">
-        <span class="profile-friend-avatar">${f?.avatar||"🙂"}</span>
+        <span class="profile-friend-avatar">${f?.photoData?`<img src="${f.photoData}" class="chat-photo-thumb">`:(f?.avatar||"🙂")}</span>
         <span class="profile-friend-main"><b>${escapeHTML(f?.name||"Friend")}</b><small>${f?.online?"Online":"Offline"} · ${(f?.interests||[]).slice(0,2).map(escapeHTML).join(" · ")}</small></span>
         <span class="profile-friend-arrow">›</span>
       </button>`;
@@ -377,11 +377,18 @@ $("gameBack").onclick=()=>{if(state.session?.type==="play")state.session=null;ac
 let pendingChatExit=false;
 function hideChatConfirm(){$("chatConfirm").classList.remove("show");pendingChatExit=false;}
 function requestLeaveChat(){
- if(!activeChatId||activeChatProfile){activeChatId=null;activeChatProfile=false;go("chats");return;}
- const c=state.chats[activeChatId]; if(!c||c.ended){activeChatId=null;activeChatProfile=false;go("chats");return;}
- // Premium users leave directly; the confirmation popup is only for free users.
- if(state.premium){activeChatId=null;activeChatProfile=false;pendingChatExit=false;go("chats");return;}
- pendingChatExit=true;$("chatConfirmTitle").textContent="Leave this chat?";$("chatConfirmText").textContent="Going back will end and lock this chat. You can start a new chat later.";$("chatConfirmYes").textContent="Yes, go back";$("chatConfirmNo").textContent="No, stay";$("chatConfirm").classList.add("show");}
+  if(!activeChatId||activeChatProfile){activeChatId=null;activeChatProfile=false;go("chats");return;}
+  const c=state.chats[activeChatId];
+  const isFriendChat = c && (c.source==="friend" || (state.connections||[]).map(Number).includes(Number(activeChatId)) || friends.some(f=>f.id===Number(activeChatId)||f.a2lId===activeChatId));
+  if(!c||c.ended||isFriendChat||state.premium){
+    activeChatId=null;
+    activeChatProfile=false;
+    pendingChatExit=false;
+    go("chats");
+    return;
+  }
+  pendingChatExit=true;$("chatConfirmTitle").textContent="Leave this chat?";$("chatConfirmText").textContent="Going back will end and lock this chat. You can start a new chat later.";$("chatConfirmYes").textContent="Yes, go back";$("chatConfirmNo").textContent="No, stay";$("chatConfirm").classList.add("show");
+}
 function requestEndChat(){
  if(!activeChatId)return;
  if(state.premium){finishChatExit();return;}
