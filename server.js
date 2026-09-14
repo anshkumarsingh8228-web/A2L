@@ -5,20 +5,39 @@ const DATABASE_URL=process.env.DATABASE_URL||'';const SUPABASE_URL=(process.env.
 function resolveDatabaseUrl(rawUrl){
   if(!rawUrl)return '';
   try{
-    const m=rawUrl.match(/@db\.([a-z0-9]+)\.supabase\.co(:[0-9]+)?(\/.*)?$/i);
-    if(m){
-      const ref=m[1], region=process.env.SUPABASE_REGION||'ap-northeast-1', poolPort=process.env.SUPABASE_POOLER_PORT||'5432', rest=m[3]||'/postgres';
-      let prefix=rawUrl.slice(0,m.index);
+    const refMatch=(SUPABASE_URL||'').match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i);
+    const defaultRef=refMatch?refMatch[1]:'kxvlhajuxbnwkejchhrt';
+    const region=process.env.SUPABASE_REGION||'ap-northeast-1';
+    const poolPort=process.env.SUPABASE_POOLER_PORT||'5432';
+
+    // Direct Supabase hostname
+    const directMatch=rawUrl.match(/@db\.([a-z0-9]+)\.supabase\.co(:[0-9]+)?(\/.*)?$/i);
+    if(directMatch){
+      const ref=directMatch[1], rest=directMatch[3]||'/postgres';
+      let prefix=rawUrl.slice(0,directMatch.index);
       const sIdx=prefix.indexOf('://');
       if(sIdx!==-1){
-        const creds=prefix.slice(sIdx+3);
-        const cIdx=creds.indexOf(':');
-        const user=cIdx!==-1?creds.slice(0,cIdx):creds;
+        const creds=prefix.slice(sIdx+3), cIdx=creds.indexOf(':'), user=cIdx!==-1?creds.slice(0,cIdx):creds;
         if(!user.includes('.')){
           prefix=prefix.slice(0,sIdx+3)+user+'.'+ref+(cIdx!==-1?creds.slice(cIdx):'');
         }
       }
       return `${prefix}@aws-0-${region}.pooler.supabase.com:${poolPort}${rest}`;
+    }
+
+    // Pooler Supabase hostname
+    const poolerMatch=rawUrl.match(/@([^@:]*pooler\.supabase\.com)(:[0-9]+)?(\/.*)?$/i);
+    if(poolerMatch){
+      let prefix=rawUrl.slice(0,poolerMatch.index);
+      const sIdx=prefix.indexOf('://');
+      if(sIdx!==-1){
+        const creds=prefix.slice(sIdx+3), cIdx=creds.indexOf(':'), user=cIdx!==-1?creds.slice(0,cIdx):creds;
+        if(!user.includes('.')){
+          prefix=prefix.slice(0,sIdx+3)+user+'.'+defaultRef+(cIdx!==-1?creds.slice(cIdx):'');
+        }
+      }
+      const host=poolerMatch[1], rest=poolerMatch[3]||'/postgres';
+      return `${prefix}@${host}:${poolPort}${rest}`;
     }
   }catch(e){console.warn('resolveDatabaseUrl error:',e.message);}
   return rawUrl;
