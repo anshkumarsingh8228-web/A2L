@@ -86,11 +86,22 @@ async function ensureProfile(c,p={}){
   }
 }
 function publicPeerRow(r){return {a2lId:r.a2l_id||r.username||`a2l_${String(r.id).slice(0,8)}`,displayName:r.display_name||'A2L user',avatar:r.avatar_url||'🙂',photoData:r.photo_data||'',ageGroup:r.age_group||'',languages:r.languages||[],interests:r.interests||[],location:r.location||''};}
-async function profileByA2L(a2l,token=''){
+async function profileByA2L(param,token=''){
+  const val=String(param||'').trim();
+  if(!val)return {rows:[]};
+  const isUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  const clean=cleanId(val);
   try{
-    if(pool){const r=await q('select * from profiles where a2l_id=$1',[cleanId(a2l)]);if(r.rows&&r.rows.length)return r;}
+    if(pool){
+      const r=isUuid
+        ? await q('select * from profiles where id=$1 or a2l_id=$2 limit 1',[val,clean])
+        : await q('select * from profiles where a2l_id=$1 or id::text=$1 limit 1',[clean]);
+      if(r.rows&&r.rows.length)return r;
+    }
   }catch(e){}
-  const rest=await sb(`profiles?a2l_id=eq.${cleanId(a2l)}&select=*`,'GET',null,token);
+  const rest=isUuid
+    ? await sb(`profiles?or=(id.eq.${val},a2l_id.eq.${clean})&select=*`,'GET',null,token)
+    : await sb(`profiles?a2l_id=eq.${clean}&select=*`,'GET',null,token);
   return {rows:Array.isArray(rest)?rest:[]};
 }
 async function isBlocked(a,b){if(!pool||!a||!b)return false;try{const r=await q(`select 1 from blocks bl join profiles pa on pa.id=bl.blocker_id join profiles pb on pb.id=bl.blocked_id where (pa.a2l_id=$1 and pb.a2l_id=$2) or (pa.a2l_id=$2 and pb.a2l_id=$1) limit 1`,[cleanId(a),cleanId(b)]);return !!r.rows[0]}catch{return false}}
@@ -100,7 +111,7 @@ async function canCall(c,p){if(!c||!p||c.id===p.id)return {ok:false,reason:'busy
 async function compatible(a,b){if(!a||!b||a.id===b.id||a.busy||b.busy)return false;const aa=a.prefs||{},bb=b.prefs||{},pa=profileOf(a),pb=profileOf(b);if(aa.online===false||bb.online===false)return false;if(pa?.privacy?.search===false||pb?.privacy?.search===false)return false;if(await isBlocked(a.id,b.id))return false;if(aa.mode&&aa.mode!=='any'&&bb.mode&&bb.mode!=='any'&&aa.mode!==bb.mode)return false;if(aa.age==='same'&&pa.ageGroup&&pb.ageGroup&&pa.ageGroup!==pb.ageGroup)return false;if(bb.age==='same'&&pa.ageGroup&&pb.ageGroup&&pa.ageGroup!==pb.ageGroup)return false;if(aa.interest&&aa.interest!=='any'&&!(pb.interests||[]).includes(aa.interest))return false;if(bb.interest&&bb.interest!=='any'&&!(pa.interests||[]).includes(bb.interest))return false;return true;}
 function removeQueue(id){for(let i=queue.length-1;i>=0;i--)if(queue[i]===id)queue.splice(i,1)}
 async function saveHistory(a,b,type='random'){if(!a?.authUserId||!b?.authUserId)return null;try{const r=await q(`insert into connection_history(user_a,user_b,session_type) values($1,$2,$3) returning id`,[a.authUserId,b.authUserId,type]);return r.rows[0]?.id}catch(e){console.error('history',e.message);return null}}
-async function notify(userA2L,type,actorA2L,payload={}){try{const [u,a]=await Promise.all([profileByA2L(userA2L),actorA2L?profileByA2L(actorA2L):Promise.resolve({rows:[]})]);const uid=u.rows[0]?.id,aid=a.rows[0]?.id||null;if(!uid)return;await q(`insert into notifications(user_id,type,actor_id,payload) values($1,$2,$3,$4)`,[uid,type,aid,JSON.stringify(payload)]);const c=clients.get(userA2L);if(c)send(c.ws,{type:'notification',notification:{type,actorId:actorA2L,payload,createdAt:new Date().toISOString()}})}catch(e){console.error('notify',e.message)}}
+async function notify(userA2L,type,actorA2L,payload={}){try{const [u,a]=await Promise.all([profileByA2L(userA2L),actorA2L?profileByA2L(actorA2L):Promise.resolve({rows:[]})]);const uid=u.rows[0]?.id,aid=a.rows[0]?.id||null;if(!uid)return;try{await q(`insert into notifications(user_id,type,actor_id,payload) values($1,$2,$3,$4)`,[uid,type,aid,JSON.stringify(payload)]);}catch{await sb('notifications','POST',{user_id:uid,type,actor_id:aid,payload});}const c=clients.get(cleanId(userA2L));if(c)send(c.ws,{type:'notification',notification:{type,actorId:actorA2L,payload,createdAt:new Date().toISOString()}})}catch(e){console.error('notify',e.message)}}
 let pairingLock=Promise.resolve();
 async function pair(c){const run=pairingLock.then(async()=>{if(!c||c.busy)return;removeQueue(c.id);for(let i=0;i<queue.length;i++){const other=clients.get(queue[i]);if(!other||other.ws.readyState!==1||other.busy){queue.splice(i,1);i--;continue}if(!await compatible(c,other))continue;queue.splice(i,1);c.busy=other.busy=true;c.peerId=other.id;c.historyId=await saveHistory(c,other,c.prefs?.mode==='voice'||other.prefs?.mode==='voice'?'voice':'random');other.peerId=c.id;other.historyId=c.historyId;const mode=(c.prefs?.mode&&c.prefs.mode!=='any')?c.prefs.mode:(other.prefs?.mode&&other.prefs.mode!=='any')?other.prefs.mode:'video';send(c.ws,{type:'match-found',peer:other.public,mode,initiator:true,historyId:c.historyId});send(other.ws,{type:'match-found',peer:c.public,mode,initiator:false,historyId:c.historyId});return}if(!c.busy){queue.push(c.id);send(c.ws,{type:'waiting'})}});pairingLock=run.catch(()=>{});return run}
 function peer(c){return c?.peerId?clients.get(c.peerId):null}function relay(c,m){const p=peer(c);if(p)send(p.ws,m)}
